@@ -1,3 +1,4 @@
+import { BrandColors, Shadows } from '@/constants/theme';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useMemo } from 'react';
 import { ScrollView, Text, View } from 'react-native';
@@ -93,60 +94,79 @@ export default function Stats() {
   }, [records]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 20, gap: 20 }}>
-      <View>
-        <Text style={{ fontSize: 28, fontWeight: '700', marginBottom: 4 }}>건강 통계</Text>
-        <Text style={{ color: '#666' }}>최근 대화 기록을 기반으로 활동과 위험 지수를 확인하세요.</Text>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: BrandColors.background }}
+      contentContainerStyle={{ padding: 24, gap: 24, paddingBottom: 48 }}>
+      <View style={{ gap: 6 }}>
+        <Text style={{ fontSize: 30, fontWeight: '800', color: BrandColors.textPrimary }}>건강 통계</Text>
+        <Text style={{ color: BrandColors.textSecondary, lineHeight: 22 }}>
+          최근 대화 기록을 기반으로 활동과 위험 지수를 확인하세요.
+        </Text>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ flex: 1, backgroundColor: '#f1f3f5', borderRadius: 14, padding: 16, gap: 6 }}>
-          <Text style={{ color: '#555' }}>저장된 대화</Text>
-          <Text style={{ fontSize: 26, fontWeight: '700' }}>{summary.total}회</Text>
-        </View>
-        <View style={{ flex: 1, backgroundColor: '#f8f9fa', borderRadius: 14, padding: 16, gap: 6 }}>
-          <Text style={{ color: '#555' }}>평균 위험 지수</Text>
-          <Text style={{ fontSize: 26, fontWeight: '700' }}>{summary.averageRisk}</Text>
-        </View>
-        <View style={{ flex: 1, backgroundColor: '#f1f3f5', borderRadius: 14, padding: 16, gap: 6 }}>
-          <Text style={{ color: '#555' }}>평균 감정 점수</Text>
-          <Text style={{ fontSize: 26, fontWeight: '700' }}>{summary.averageMood}</Text>
-        </View>
+      <View style={{ flexDirection: 'row', gap: 16 }}>
+        <SummaryCard label="저장된 대화" value={`${summary.total}회`} accent={BrandColors.primary} />
+        <SummaryCard label="평균 위험 지수" value={`${summary.averageRisk}`} accent={BrandColors.primaryDark} />
+        <SummaryCard label="평균 감정 점수" value={`${summary.averageMood}`} accent={BrandColors.accent} />
       </View>
 
-      <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f1f3f5' }}>
-        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12 }}>주간 위험 지수 추이</Text>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 24,
+          padding: 20,
+          borderWidth: 1,
+          borderColor: BrandColors.border,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12, color: BrandColors.textPrimary }}>
+          주간 위험 지수 추이
+        </Text>
         <VictoryChart
           theme={VictoryTheme.material}
           domainPadding={{ x: 20, y: 20 }}
           padding={{ top: 20, bottom: 50, left: 50, right: 20 }}
           height={240}>
-          <VictoryAxis style={{ tickLabels: { fontSize: 12 } }} />
-          <VictoryAxis dependentAxis style={{ tickLabels: { fontSize: 12 } }} tickFormat={(y) => `${y}`} />
+          <VictoryAxis style={{ tickLabels: { fontSize: 12, fill: BrandColors.textSecondary } }} />
+          <VictoryAxis
+            dependentAxis
+            style={{ tickLabels: { fontSize: 12, fill: BrandColors.textSecondary } }}
+            tickFormat={(y) => `${y}`}
+          />
           <VictoryLine
             data={dailyTrend}
             x="label"
             y="risk"
-            style={{ data: { stroke: '#4c6ef5', strokeWidth: 3 } }}
+            style={{ data: { stroke: BrandColors.primary, strokeWidth: 3 } }}
             interpolation="monotoneX"
           />
         </VictoryChart>
       </View>
 
-      <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f1f3f5' }}>
-        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12 }}>주간 대화 횟수</Text>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 24,
+          padding: 20,
+          borderWidth: 1,
+          borderColor: BrandColors.border,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12, color: BrandColors.textPrimary }}>
+          주간 대화 횟수
+        </Text>
         <VictoryChart
           theme={VictoryTheme.material}
           domainPadding={{ x: 20 }}
           padding={{ top: 20, bottom: 50, left: 50, right: 20 }}
           height={240}>
-          <VictoryAxis style={{ tickLabels: { fontSize: 12 } }} />
-          <VictoryAxis dependentAxis style={{ tickLabels: { fontSize: 12 } }} />
+          <VictoryAxis style={{ tickLabels: { fontSize: 12, fill: BrandColors.textSecondary } }} />
+          <VictoryAxis dependentAxis style={{ tickLabels: { fontSize: 12, fill: BrandColors.textSecondary } }} />
           <VictoryBar
             data={dailyTrend}
             x="label"
             y="count"
-            style={{ data: { fill: '#82c91e', width: 22 } }}
+            style={{ data: { fill: BrandColors.accent, width: 22 } }}
             cornerRadius={6}
           />
         </VictoryChart>
@@ -155,19 +175,39 @@ export default function Stats() {
       {summary.lastConversation ? (
         <View
           style={{
-            backgroundColor: '#f8f9fa',
-            borderRadius: 16,
-            padding: 18,
+            backgroundColor: BrandColors.surface,
+            borderRadius: 22,
+            padding: 20,
             gap: 8,
             borderWidth: 1,
-            borderColor: '#edf0f5',
+            borderColor: BrandColors.border,
+            ...Shadows.card,
           }}>
-          <Text style={{ fontSize: 18, fontWeight: '700' }}>최근 대화 요약</Text>
-          <Text style={{ color: '#444', lineHeight: 22 }}>{summary.lastConversation}</Text>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>최근 대화 요약</Text>
+          <Text style={{ color: BrandColors.textSecondary, lineHeight: 22 }}>{summary.lastConversation}</Text>
         </View>
       ) : (
-        <Text style={{ color: '#666' }}>기록이 저장되면 맞춤 통계를 보여드릴게요.</Text>
+        <Text style={{ color: BrandColors.textSecondary }}>기록이 저장되면 맞춤 통계를 보여드릴게요.</Text>
       )}
     </ScrollView>
+  );
+}
+
+function SummaryCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 20,
+        padding: 18,
+        gap: 6,
+        backgroundColor: BrandColors.surface,
+        borderWidth: 1,
+        borderColor: BrandColors.border,
+        ...Shadows.card,
+      }}>
+      <Text style={{ color: BrandColors.textSecondary }}>{label}</Text>
+      <Text style={{ fontSize: 24, fontWeight: '800', color: accent }}>{value}</Text>
+    </View>
   );
 }

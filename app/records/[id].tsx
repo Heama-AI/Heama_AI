@@ -1,7 +1,8 @@
+import { BrandColors, Shadows } from '@/constants/theme';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Button, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 export default function RecordDetail() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -18,12 +19,29 @@ export default function RecordDetail() {
 
   if (!record) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 }}>
-        <Text style={{ fontSize: 18, fontWeight: '600' }}>찾을 수 없는 기록입니다.</Text>
-        <Text style={{ color: '#666', textAlign: 'center' }}>
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+          gap: 16,
+          backgroundColor: BrandColors.background,
+        }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>찾을 수 없는 기록입니다.</Text>
+        <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
           기록이 삭제되었거나 아직 저장되지 않았을 수 있습니다.
         </Text>
-        <Button title="기록 목록으로" onPress={() => router.replace('/records')} />
+        <Pressable
+          onPress={() => router.replace('/records')}
+          style={{
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+            borderRadius: 16,
+            backgroundColor: BrandColors.primary,
+          }}>
+          <Text style={{ color: '#fff', fontWeight: '600' }}>기록 목록으로 돌아가기</Text>
+        </Pressable>
       </View>
     );
   }
@@ -55,78 +73,143 @@ export default function RecordDetail() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 20 }}>
-      <View style={{ gap: 12 }}>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          onBlur={handleUpdateTitle}
-          style={{
-            fontSize: 26,
-            fontWeight: '700',
-            borderBottomWidth: 1,
-            borderColor: '#e4e7eb',
-            paddingBottom: 6,
-          }}
-        />
-        <Text style={{ color: '#999' }}>
-          {new Date(record.createdAt).toLocaleString('ko-KR', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </Text>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: BrandColors.background }}
+      contentContainerStyle={{ padding: 24, gap: 24, paddingBottom: 48 }}>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 26,
+          padding: 24,
+          gap: 16,
+          ...Shadows.card,
+        }}>
+        <View style={{ gap: 10 }}>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            onBlur={handleUpdateTitle}
+            style={{
+              fontSize: 28,
+              fontWeight: '800',
+              color: BrandColors.textPrimary,
+              paddingVertical: 6,
+            }}
+            placeholder="기록 제목"
+            placeholderTextColor={BrandColors.textSecondary}
+          />
+          <Text style={{ color: BrandColors.textSecondary, fontSize: 13 }}>
+            {new Date(record.createdAt).toLocaleString('ko-KR', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <StatCard label="치매 위험 지수" value={`${record.stats.riskScore}`} accent={BrandColors.primary} />
+          <StatCard label="감정 점수" value={`${record.stats.moodScore}`} accent={BrandColors.accent} />
+          <StatCard label="대화 횟수" value={`${record.stats.totalTurns}`} accent={BrandColors.secondary} />
+        </View>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View
-          style={{ flex: 1, backgroundColor: '#f1f3f5', borderRadius: 14, padding: 16, gap: 4, alignItems: 'center' }}>
-          <Text style={{ color: '#555' }}>치매 위험 지수</Text>
-          <Text style={{ fontSize: 24, fontWeight: '700' }}>{record.stats.riskScore}</Text>
-        </View>
-        <View
-          style={{ flex: 1, backgroundColor: '#f8f9fa', borderRadius: 14, padding: 16, gap: 4, alignItems: 'center' }}>
-          <Text style={{ color: '#555' }}>감정 점수</Text>
-          <Text style={{ fontSize: 24, fontWeight: '700' }}>{record.stats.moodScore}</Text>
-        </View>
-        <View
-          style={{ flex: 1, backgroundColor: '#f1f3f5', borderRadius: 14, padding: 16, gap: 4, alignItems: 'center' }}>
-          <Text style={{ color: '#555' }}>대화 횟수</Text>
-          <Text style={{ fontSize: 24, fontWeight: '700' }}>{record.stats.totalTurns}</Text>
-        </View>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 24,
+          padding: 22,
+          gap: 14,
+          borderWidth: 1,
+          borderColor: BrandColors.border,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>요약</Text>
+        <Text style={{ fontSize: 16, lineHeight: 24, color: BrandColors.textSecondary }}>{record.summary}</Text>
       </View>
 
-      <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 18, gap: 12, borderWidth: 1, borderColor: '#f1f3f5' }}>
-        <Text style={{ fontSize: 20, fontWeight: '700' }}>요약</Text>
-        <Text style={{ fontSize: 16, lineHeight: 24, color: '#333' }}>{record.summary}</Text>
-      </View>
-
-      <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 18, gap: 8, borderWidth: 1, borderColor: '#f1f3f5' }}>
-        <Text style={{ fontSize: 20, fontWeight: '700' }}>핵심 메모</Text>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 24,
+          padding: 22,
+          gap: 10,
+          borderWidth: 1,
+          borderColor: BrandColors.border,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>핵심 메모</Text>
         {record.highlights.map((highlight) => (
           <View key={highlight} style={{ paddingVertical: 6 }}>
-            <Text style={{ color: '#4c6ef5', fontWeight: '600' }}>• {highlight}</Text>
+            <Text style={{ color: BrandColors.primary, fontWeight: '600', lineHeight: 20 }}>• {highlight}</Text>
           </View>
         ))}
       </View>
 
       <View style={{ gap: 8, flexDirection: 'row', flexWrap: 'wrap' }}>
         {record.keywords.map((keyword) => (
-          <View key={keyword} style={{ backgroundColor: '#f1f3f5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
-            <Text style={{ color: '#555', fontSize: 13 }}>#{keyword}</Text>
+          <View
+            key={keyword}
+            style={{
+              backgroundColor: BrandColors.surface,
+              borderRadius: 16,
+              paddingHorizontal: 14,
+              paddingVertical: 6,
+              borderWidth: 1,
+              borderColor: BrandColors.border,
+            }}>
+            <Text style={{ color: BrandColors.textSecondary, fontSize: 13 }}>#{keyword}</Text>
           </View>
         ))}
       </View>
 
-      <View style={{ gap: 12 }}>
-        <Button
-          title="이 기록으로 게임 풀기"
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <Pressable
           onPress={() => router.push({ pathname: '/games', params: { recordId: record.id } })}
-        />
-        <Button title="기록 삭제" color="#f03e3e" onPress={handleDelete} />
+          style={{
+            flex: 1,
+            paddingVertical: 14,
+            borderRadius: 16,
+            backgroundColor: BrandColors.primary,
+            alignItems: 'center',
+          }}>
+          <Text style={{ color: '#fff', fontWeight: '600' }}>이 기록으로 게임 풀기</Text>
+        </Pressable>
+        <Pressable
+          onPress={handleDelete}
+          style={{
+            flex: 1,
+            paddingVertical: 14,
+            borderRadius: 16,
+            backgroundColor: BrandColors.surface,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: BrandColors.dangerSoft,
+          }}>
+          <Text style={{ color: BrandColors.danger, fontWeight: '600' }}>기록 삭제</Text>
+        </Pressable>
       </View>
     </ScrollView>
+  );
+}
+
+function StatCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 18,
+        padding: 16,
+        gap: 6,
+        backgroundColor: BrandColors.primarySoft,
+        borderWidth: 1,
+        borderColor: BrandColors.border,
+        alignItems: 'center',
+      }}>
+      <Text style={{ color: BrandColors.textSecondary, fontSize: 13 }}>{label}</Text>
+      <Text style={{ fontSize: 22, fontWeight: '700', color: accent }}>{value}</Text>
+    </View>
   );
 }

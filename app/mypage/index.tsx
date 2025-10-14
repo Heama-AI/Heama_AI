@@ -1,8 +1,9 @@
-import CardButton from '@/components/CardButton';
+import { HaemayaMascot } from '@/components/HaemayaMascot';
+import { BrandColors, Shadows } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
@@ -88,77 +89,202 @@ export default function MyPage() {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 24 }}>
-      <View style={{ gap: 4 }}>
-        <Text style={{ fontSize: 26, fontWeight: '700' }}>
-          {profile.name ? `${profile.name}님,` : '안녕하세요,'}
-        </Text>
-        <Text style={{ fontSize: 18, color: '#666' }}>
-          오늘도 기억 코치와 함께 일상을 관리해보세요.
-        </Text>
-        {profile.email ? <Text style={{ color: '#888' }}>{profile.email}</Text> : null}
-      </View>
-
+    <ScrollView
+      style={{ flex: 1, backgroundColor: BrandColors.background }}
+      contentContainerStyle={{ padding: 24, gap: 24, paddingBottom: 48 }}>
       <View
         style={{
-          backgroundColor: '#f2f4f8',
-          borderRadius: 16,
-          padding: 20,
-          gap: 12,
-          flexDirection: 'row',
-          justifyContent: 'space-between',
+          backgroundColor: BrandColors.surface,
+          borderRadius: 28,
+          padding: 24,
+          gap: 14,
+          ...Shadows.card,
         }}>
-        <View style={{ gap: 4 }}>
-          <Text style={{ fontSize: 32, fontWeight: '700' }}>{records.length}</Text>
-          <Text style={{ color: '#666' }}>저장된 대화</Text>
-        </View>
-        <View style={{ gap: 4 }}>
-          <Text style={{ fontSize: 32, fontWeight: '700' }}>{metrics.averageRisk}</Text>
-          <Text style={{ color: '#666' }}>치매 위험 지수</Text>
-        </View>
-      </View>
-
-      <View
-        style={{
-          backgroundColor: '#ffffff',
-          borderRadius: 16,
-          padding: 20,
-          shadowColor: '#000',
-          shadowOpacity: 0.05,
-          shadowRadius: 12,
-          gap: 12,
-        }}>
-        <Text style={{ fontSize: 20, fontWeight: '700' }}>활동 요약</Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <View style={{ gap: 4 }}>
-            <Text style={{ color: '#777' }}>주간 대화 변화</Text>
-            <Text style={{ fontSize: 18, fontWeight: '600' }}>
-              {metrics.weeklyTrend >= 0 ? '+' : ''}
-              {metrics.weeklyTrend}%
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <HaemayaMascot size={80} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={{ fontSize: 30, fontWeight: '800', color: BrandColors.textPrimary }}>
+              {profile.name ? `${profile.name}님,` : '안녕하세요,'}
             </Text>
-          </View>
-          <View style={{ gap: 4 }}>
-            <Text style={{ color: '#777' }}>평균 감정 점수</Text>
-            <Text style={{ fontSize: 18, fontWeight: '600' }}>{metrics.averageMood}</Text>
+            <Text style={{ fontSize: 16, color: BrandColors.textSecondary, lineHeight: 22 }}>
+              기억 케어 여정을 이어가고 있어요. 오늘도 차분히 기록을 살펴볼까요?
+            </Text>
+            {profile.email ? <Text style={{ color: BrandColors.textSecondary }}>{profile.email}</Text> : null}
           </View>
         </View>
-        {lastRecord ? (
-          <View style={{ marginTop: 12 }}>
-            <Text style={{ color: '#777', marginBottom: 4 }}>최근 기록 요약</Text>
-            <Text style={{ fontSize: 16, lineHeight: 22 }}>{lastRecord.summary}</Text>
-          </View>
-        ) : (
-          <Text style={{ color: '#777' }}>아직 저장된 대화가 없습니다.</Text>
-        )}
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 16,
+            marginTop: 8,
+          }}>
+          <DashboardMetric label="저장된 대화" value={`${records.length}회`} />
+          <DashboardMetric label="평균 위험 지수" value={`${metrics.averageRisk}점`} accent={BrandColors.primary} />
+          <DashboardMetric label="평균 감정 점수" value={`${metrics.averageMood}`} accent={BrandColors.accent} />
+        </View>
       </View>
 
-      <View style={{ gap: 12 }}>
-        <CardButton title="기록 보러가기" onPress={() => router.push('/records')} />
-        <CardButton title="통계 확인하기" onPress={() => router.push('/stats')} />
-        <CardButton title="치매 예방 게임" onPress={() => router.push('/games')} />
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 26,
+          padding: 22,
+          gap: 16,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>최근 활동</Text>
+        <View style={{ flexDirection: 'row', gap: 16 }}>
+          <StatusCard
+            title="주간 대화 변화"
+            value={`${metrics.weeklyTrend >= 0 ? '+' : ''}${metrics.weeklyTrend}%`}
+            background={BrandColors.primarySoft}
+            valueColor={BrandColors.primary}
+          />
+          <StatusCard
+            title="최근 기록 요약"
+            value={lastRecord ? lastRecord.summary : '아직 저장된 대화가 없습니다.'}
+            background={BrandColors.surfaceSoft}
+            valueColor={BrandColors.textSecondary}
+            multiline
+          />
+        </View>
       </View>
 
-      <CardButton title="로그아웃" onPress={logout} />
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 26,
+          padding: 22,
+          gap: 18,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>관리 기능</Text>
+        <ActionRow label="통계 확인" description="대화 데이터를 기반으로 인지 건강 지표를 살펴보세요." onPress={() => router.push('/stats')} />
+        <ActionRow
+          label="대화 기록 수정"
+          description="저장된 기록 제목과 메모를 관리합니다."
+          onPress={() => router.push('/records')}
+        />
+        <ActionRow
+          label="보호자 연동"
+          description="보호자와 기록을 공유할 수 있도록 연동 코드를 발급합니다."
+          onPress={() =>
+            Alert.alert(
+              '보호자 연동',
+              '보호자 초대 코드는 임시 기능입니다.\n\n예시 코드: CARE-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
+            )
+          }
+        />
+        <ActionRow
+          label="로그아웃"
+          description="안전하게 로그아웃하고 초기 화면으로 돌아갑니다."
+          onPress={logout}
+          variant="danger"
+        />
+      </View>
     </ScrollView>
+  );
+}
+
+function DashboardMetric({
+  label,
+  value,
+  accent = BrandColors.textPrimary,
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 18,
+        padding: 16,
+        backgroundColor: BrandColors.surfaceSoft,
+        borderWidth: 1,
+        borderColor: BrandColors.border,
+        gap: 4,
+      }}>
+      <Text style={{ color: BrandColors.textSecondary }}>{label}</Text>
+      <Text style={{ fontSize: 22, fontWeight: '800', color: accent }}>{value}</Text>
+    </View>
+  );
+}
+
+function StatusCard({
+  title,
+  value,
+  background,
+  valueColor,
+  multiline,
+}: {
+  title: string;
+  value: string;
+  background: string;
+  valueColor: string;
+  multiline?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: 18,
+        padding: 18,
+        backgroundColor: background,
+        borderWidth: 1,
+        borderColor: BrandColors.border,
+        minHeight: 120,
+      }}>
+      <Text style={{ color: BrandColors.textSecondary, marginBottom: 8 }}>{title}</Text>
+      <Text
+        style={{
+          color: valueColor,
+          fontWeight: '700',
+          fontSize: multiline ? 14 : 20,
+          lineHeight: multiline ? 20 : undefined,
+        }}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function ActionRow({
+  label,
+  description,
+  onPress,
+  variant = 'default',
+}: {
+  label: string;
+  description: string;
+  onPress: () => void;
+  variant?: 'default' | 'danger';
+}) {
+  const textColor = variant === 'danger' ? BrandColors.danger : BrandColors.textPrimary;
+  const icon = variant === 'danger' ? '→' : '→';
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        borderRadius: 18,
+        paddingVertical: 16,
+        paddingHorizontal: 18,
+        borderWidth: 1,
+        borderColor: BrandColors.border,
+        backgroundColor: BrandColors.surfaceSoft,
+        ...Shadows.card,
+      }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: textColor }}>{label}</Text>
+          <Text style={{ fontSize: 13, color: BrandColors.textSecondary, marginTop: 4, lineHeight: 18 }}>
+            {description}
+          </Text>
+        </View>
+        <Text style={{ color: textColor, fontSize: 18, fontWeight: '700' }}>{icon}</Text>
+      </View>
+    </Pressable>
   );
 }

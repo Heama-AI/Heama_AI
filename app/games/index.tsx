@@ -1,4 +1,5 @@
 import CardButton from '@/components/CardButton';
+import { BrandColors, Shadows } from '@/constants/theme';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -41,12 +42,12 @@ function ChoiceButton({
       style={[
         {
           borderWidth: 1,
-          borderColor: '#dee2e6',
-          backgroundColor: '#fff',
-          borderRadius: 12,
-          padding: 14,
+          borderColor: BrandColors.border,
+          backgroundColor: BrandColors.surface,
+          borderRadius: 14,
+          padding: 16,
         },
-        selected && !style && { borderColor: '#4c6ef5', backgroundColor: '#edf2ff' },
+        selected && !style && { borderColor: BrandColors.primary, backgroundColor: BrandColors.primarySoft },
         style,
       ]}>
       <Text style={{ color: textColor, fontSize: 16 }}>{choice}</Text>
@@ -75,9 +76,19 @@ export default function Games() {
 
   if (!activeRecord) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }}>
-        <Text style={{ fontSize: 20, fontWeight: '700' }}>퀴즈를 만들 기록이 없어요</Text>
-        <Text style={{ color: '#666', textAlign: 'center' }}>대화를 저장한 뒤 맞춤 퀴즈를 풀어보세요.</Text>
+      <View
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+          gap: 16,
+          backgroundColor: BrandColors.background,
+        }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>퀴즈를 만들 기록이 없어요</Text>
+        <Text style={{ color: BrandColors.textSecondary, textAlign: 'center' }}>
+          대화를 저장한 뒤 맞춤 퀴즈를 풀어보세요.
+        </Text>
         <CardButton title="대화하러 가기" onPress={() => router.push('/chat')} />
       </View>
     );
@@ -144,29 +155,64 @@ export default function Games() {
     : () => undefined;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 20 }}>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: BrandColors.background }}
+      contentContainerStyle={{ padding: 24, gap: 24, paddingBottom: 48 }}>
       <View>
-        <Text style={{ fontSize: 26, fontWeight: '700' }}>기억력 퀴즈</Text>
-        <Text style={{ color: '#666' }}>{activeRecord.title} 기록을 기반으로 생성된 맞춤 문제입니다.</Text>
+        <Text style={{ fontSize: 28, fontWeight: '800', color: BrandColors.textPrimary }}>기억력 퀴즈</Text>
+        <Text style={{ color: BrandColors.textSecondary }}>
+          {activeRecord.title} 기록을 기반으로 생성된 맞춤 문제입니다.
+        </Text>
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ flex: 1, backgroundColor: '#f1f3f5', borderRadius: 14, padding: 16, gap: 4 }}>
-          <Text style={{ color: '#555' }}>현재 점수</Text>
-          <Text style={{ fontSize: 24, fontWeight: '700' }}>
+      <View style={{ flexDirection: 'row', gap: 16 }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: BrandColors.surface,
+            borderRadius: 20,
+            padding: 18,
+            gap: 6,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            ...Shadows.card,
+          }}>
+          <Text style={{ color: BrandColors.textSecondary }}>현재 점수</Text>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: BrandColors.primary }}>
             {state.score} / {questions.length}
           </Text>
         </View>
-        <View style={{ flex: 1, backgroundColor: '#f8f9fa', borderRadius: 14, padding: 16, gap: 4 }}>
-          <Text style={{ color: '#555' }}>현재 문제</Text>
-          <Text style={{ fontSize: 24, fontWeight: '700' }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: BrandColors.surface,
+            borderRadius: 20,
+            padding: 18,
+            gap: 6,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            ...Shadows.card,
+          }}>
+          <Text style={{ color: BrandColors.textSecondary }}>현재 문제</Text>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: BrandColors.primaryDark }}>
             {state.questionIndex + 1} / {questions.length}
           </Text>
         </View>
       </View>
 
-      <View style={{ backgroundColor: '#fff', borderRadius: 16, padding: 20, gap: 16, borderWidth: 1, borderColor: '#f1f3f5' }}>
-        <Text style={{ fontSize: 18, fontWeight: '700' }}>{currentQuestion.question}</Text>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 26,
+          padding: 24,
+          gap: 16,
+          borderWidth: 1,
+          borderColor: BrandColors.border,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>
+          {currentQuestion.question}
+        </Text>
         <View style={{ gap: 12 }}>
           {currentQuestion.choices.map((choice) => {
             const containerStyle = answerStyle(choice);
@@ -174,7 +220,13 @@ export default function Games() {
             const isCorrectChoice = state.showExplanation && choice === currentQuestion.answer;
             const isWrongChoice =
               state.showExplanation && choice === state.selectedChoice && choice !== currentQuestion.answer;
-            const textColor = isCorrectChoice ? '#2b8a3e' : isWrongChoice ? '#c92a2a' : isSelected ? '#4c6ef5' : '#333';
+            const textColor = isCorrectChoice
+              ? BrandColors.success
+              : isWrongChoice
+              ? BrandColors.danger
+              : isSelected
+              ? BrandColors.primary
+              : BrandColors.textPrimary;
 
             return (
               <ChoiceButton
@@ -192,28 +244,28 @@ export default function Games() {
         {state.showExplanation ? (
           <View
             style={{
-              backgroundColor: '#f8f9fa',
+              backgroundColor: BrandColors.surfaceSoft,
               borderRadius: 12,
               padding: 12,
               borderWidth: 1,
-              borderColor: '#e9ecef',
+              borderColor: BrandColors.border,
             }}>
-            <Text style={{ color: '#4c6ef5', fontWeight: '600', marginBottom: 4 }}>
+            <Text style={{ color: BrandColors.primary, fontWeight: '600', marginBottom: 4 }}>
               정답: {currentQuestion.answer}
             </Text>
-            <Text style={{ color: '#555', lineHeight: 20 }}>{currentQuestion.explanation}</Text>
+            <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>{currentQuestion.explanation}</Text>
           </View>
         ) : null}
         <Pressable
           onPress={handleAction}
           style={{
-            marginTop: 8,
-            backgroundColor: '#4c6ef5',
-            borderRadius: 12,
-            padding: 14,
+            marginTop: 12,
+            backgroundColor: BrandColors.primary,
+            borderRadius: 16,
+            padding: 16,
             alignItems: 'center',
           }}>
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
             {state.showExplanation ? '다음으로' : '정답 확인'}
           </Text>
         </Pressable>
@@ -222,27 +274,42 @@ export default function Games() {
       {state.completed ? (
         <View
           style={{
-            backgroundColor: '#f1f3f5',
-            borderRadius: 16,
-            padding: 18,
-            gap: 12,
+            backgroundColor: BrandColors.surface,
+            borderRadius: 24,
+            padding: 22,
+            gap: 14,
             borderWidth: 1,
-            borderColor: '#e9ecef',
+            borderColor: BrandColors.border,
+            ...Shadows.card,
           }}>
-          <Text style={{ fontSize: 18, fontWeight: '700' }}>퀴즈 완료!</Text>
-          <Text style={{ color: '#555' }}>
+          <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>퀴즈 완료!</Text>
+          <Text style={{ color: BrandColors.textSecondary }}>
             총 {questions.length}문제 중 {state.score}문제를 맞췄어요. 기록을 복습하고 다시 도전해보세요.
           </Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
             <Pressable
               onPress={restartGame}
-              style={{ flex: 1, backgroundColor: '#4c6ef5', borderRadius: 12, padding: 14, alignItems: 'center' }}>
-              <Text style={{ color: '#fff', fontWeight: '600' }}>다시 도전</Text>
+              style={{
+                flex: 1,
+                backgroundColor: BrandColors.primary,
+                borderRadius: 16,
+                padding: 14,
+                alignItems: 'center',
+              }}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>다시 도전</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push(`/records/${activeRecord.id}`)}
-              style={{ flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#dee2e6' }}>
-              <Text style={{ color: '#4c6ef5', fontWeight: '600' }}>기록 복습</Text>
+              style={{
+                flex: 1,
+                backgroundColor: BrandColors.surface,
+                borderRadius: 16,
+                padding: 14,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: BrandColors.border,
+              }}>
+              <Text style={{ color: BrandColors.primary, fontWeight: '700' }}>기록 복습</Text>
             </Pressable>
           </View>
         </View>

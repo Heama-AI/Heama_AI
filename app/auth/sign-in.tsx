@@ -1,8 +1,10 @@
+import { HaemayaMascot } from '@/components/HaemayaMascot';
+import { BrandColors, Shadows } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Button, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -13,7 +15,7 @@ export default function SignIn() {
 
   useEffect(() => {
     if (userId) {
-      router.replace('/');
+      router.replace('/home');
     }
   }, [userId]);
 
@@ -34,7 +36,7 @@ export default function SignIn() {
     if (data.user) {
       setUserId(data.user.id);
       Alert.alert('로그인 성공', '메인 화면으로 이동합니다.');
-      router.replace('/');
+      router.replace('/home');
     }
   };
 
@@ -43,38 +45,102 @@ export default function SignIn() {
   };
 
   return (
-    <View style={{ flex: 1, padding: 24, justifyContent: 'center' }}>
-      <Text style={{ fontSize: 28, fontWeight: '700', marginBottom: 24 }}>로그인</Text>
-      <TextInput
-        placeholder="이메일"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
+    <ScrollView
+      style={{ flex: 1, backgroundColor: BrandColors.background }}
+      contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
+      <View
         style={{
-          borderWidth: 1,
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 12,
-          borderColor: '#ccc',
-        }}
-      />
-      <TextInput
-        placeholder="비밀번호"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        style={{
-          borderWidth: 1,
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 20,
-          borderColor: '#ccc',
-        }}
-      />
-      <Button title={loading ? '처리 중...' : '로그인'} onPress={onSignIn} disabled={loading} />
-      <View style={{ height: 12 }} />
-      <Button title="회원가입" onPress={goToSignUp} disabled={loading} />
-    </View>
+          backgroundColor: BrandColors.surface,
+          borderRadius: 28,
+          padding: 28,
+          gap: 20,
+          ...Shadows.card,
+        }}>
+        <View style={{ alignItems: 'center', gap: 12 }}>
+          <HaemayaMascot size={120} />
+          <Text style={{ fontSize: 28, fontWeight: '800', color: BrandColors.textPrimary }}>해마에 오신 걸 환영해요</Text>
+          <Text style={{ fontSize: 14, color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+            등록된 이메일과 비밀번호로 로그인해 케어를 이어가세요.
+          </Text>
+        </View>
+
+        <View style={{ gap: 14 }}>
+          <TextInput
+            placeholder="이메일 주소"
+            placeholderTextColor={BrandColors.textSecondary}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
+            style={{
+              borderWidth: 1,
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              borderColor: BrandColors.border,
+              backgroundColor: BrandColors.surfaceSoft,
+              fontSize: 15,
+              color: BrandColors.textPrimary,
+            }}
+          />
+          <TextInput
+            placeholder="비밀번호"
+            placeholderTextColor={BrandColors.textSecondary}
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            style={{
+              borderWidth: 1,
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 14,
+              borderColor: BrandColors.border,
+              backgroundColor: BrandColors.surfaceSoft,
+              fontSize: 15,
+              color: BrandColors.textPrimary,
+            }}
+          />
+        </View>
+
+        <View style={{ gap: 12 }}>
+          <AuthButton label={loading ? '처리 중...' : '로그인'} onPress={onSignIn} disabled={loading} />
+          <AuthButton label="회원가입" variant="outline" onPress={goToSignUp} disabled={loading} />
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+function AuthButton({
+  label,
+  onPress,
+  variant = 'solid',
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: 'solid' | 'outline';
+  disabled?: boolean;
+}) {
+  const backgroundColor =
+    variant === 'solid' ? BrandColors.primary : BrandColors.surface;
+  const textColor = variant === 'solid' ? '#fff' : BrandColors.textPrimary;
+  const borderColor = variant === 'solid' ? 'transparent' : BrandColors.border;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={{
+        opacity: disabled ? 0.7 : 1,
+        paddingVertical: 16,
+        borderRadius: 18,
+        alignItems: 'center',
+        backgroundColor,
+        borderWidth: 2,
+        borderColor,
+      }}>
+      <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>{label}</Text>
+    </Pressable>
   );
 }

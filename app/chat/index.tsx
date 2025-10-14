@@ -1,21 +1,23 @@
+import { HaemayaMascot } from '@/components/HaemayaMascot';
+import { BrandColors, Shadows } from '@/constants/theme';
 import { mockLLMReply } from '@/lib/assistant';
 import { extractKeywords } from '@/lib/conversation';
-import { say } from '@/lib/speech';
+import { say, stopSpeaking } from '@/lib/speech';
+import { startMockRecording, type RecordingHandle } from '@/lib/voice';
 import { useChatStore } from '@/store/chatStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import type { ChatMessage } from '@/types/chat';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
-  Button,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
@@ -30,14 +32,19 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       }}>
       <View
         style={{
-          backgroundColor: isUser ? '#4c6ef5' : '#f1f3f5',
+          backgroundColor: isUser ? BrandColors.primary : BrandColors.surface,
           paddingVertical: 10,
           paddingHorizontal: 14,
           borderRadius: 16,
           borderBottomRightRadius: isUser ? 0 : 16,
           borderBottomLeftRadius: isUser ? 16 : 0,
+          borderWidth: isUser ? 0 : 1,
+          borderColor: isUser ? undefined : BrandColors.border,
+          ...(!isUser ? {} : Shadows.card),
         }}>
-        <Text style={{ color: isUser ? '#fff' : '#111', fontSize: 16, lineHeight: 22 }}>{message.text}</Text>
+        <Text style={{ color: isUser ? '#fff' : BrandColors.textPrimary, fontSize: 16, lineHeight: 22 }}>
+          {message.text}
+        </Text>
       </View>
       <Text style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
         {new Date(message.ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
@@ -46,11 +53,196 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
+function TypingIndicator() {
+  const [dotCount, setDotCount] = useState(1);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDotCount((prev) => (prev % 3) + 1);
+    }, 400);
+    return () => clearInterval(interval);
+  }, []);
+
+  const dots = '.'.repeat(dotCount);
+
+  return (
+    <View style={{ marginVertical: 6, alignSelf: 'flex-start', maxWidth: '80%' }}>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          paddingVertical: 10,
+          paddingHorizontal: 14,
+          borderRadius: 16,
+          borderBottomLeftRadius: 0,
+          borderWidth: 1,
+          borderColor: BrandColors.border,
+        }}>
+        <Text style={{ color: BrandColors.primary, fontWeight: '600' }}>답변 생성 중{dots}</Text>
+      </View>
+    </View>
+  );
+}
+
+function VoiceVisualizer({ active }: { active: boolean }) {
+  const [levels, setLevels] = useState([0.25, 0.45, 0.35, 0.5, 0.3]);
+
+  useEffect(() => {
+    if (!active) {
+      setLevels([0.2, 0.2, 0.2, 0.2, 0.2]);
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      setLevels([
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        Math.random(),
+        Math.random(),
+      ]);
+    }, 120);
+
+    return () => clearInterval(interval);
+  }, [active]);
+
+  if (!active) {
+    return null;
+  }
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        height: 26,
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: BrandColors.primarySoft,
+      }}>
+      {levels.map((level, index) => (
+        <View
+          key={index}
+          style={{
+            width: 4,
+            borderRadius: 2,
+            height: 8 + level * 16,
+            backgroundColor: BrandColors.primary,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+function RecordButton({
+  recording,
+  level,
+  onPress,
+  disabled,
+}: {
+  recording: boolean;
+  level: number;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(scale, {
+      toValue: recording ? 1 + Math.min(level, 1) * 0.35 + 0.1 : 1,
+      duration: 120,
+      useNativeDriver: true,
+    }).start();
+  }, [recording, level, scale]);
+
+  return (
+    <Pressable onPress={onPress} disabled={disabled} style={{ alignItems: 'center' }}>
+      <Animated.View
+        style={{
+          transform: [{ scale }],
+          width: 118,
+          height: 118,
+          borderRadius: 59,
+          backgroundColor: recording ? BrandColors.primarySoft : BrandColors.secondarySoft,
+          alignItems: 'center',
+          justifyContent: 'center',
+          ...Shadows.floating,
+        }}>
+        <View
+          style={{
+            position: 'absolute',
+            width: 118,
+            height: 118,
+            borderRadius: 59,
+            borderWidth: 2,
+            borderColor: recording ? BrandColors.accentSoft : 'rgba(255, 255, 255, 0.4)',
+          }}
+        />
+        <View
+          style={{
+            width: 94,
+            height: 94,
+            borderRadius: 47,
+            backgroundColor: recording ? BrandColors.primary : BrandColors.primaryDark,
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: BrandColors.primary,
+            shadowOpacity: recording ? 0.35 : 0.2,
+            shadowRadius: 14,
+          }}>
+          <Ionicons name={recording ? 'stop' : 'mic'} size={32} color="#fff" />
+        </View>
+      </Animated.View>
+      <Text style={{ marginTop: 16, color: recording ? BrandColors.primary : BrandColors.textSecondary, fontSize: 14 }}>
+        {recording ? '녹음 중... 눌러서 종료' : '버튼을 눌러 말씀해주세요'}
+      </Text>
+    </Pressable>
+  );
+}
+
+function HeaderActionButton({
+  label,
+  onPress,
+  variant = 'primary',
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: 'primary' | 'surface';
+  disabled?: boolean;
+}) {
+  const background = variant === 'primary' ? BrandColors.primary : BrandColors.primarySoft;
+  const textColor = variant === 'primary' ? '#fff' : BrandColors.primary;
+  const disabledBackground = variant === 'primary' ? 'rgba(247, 201, 72, 0.35)' : BrandColors.primarySoft;
+  const disabledTextColor = variant === 'primary' ? 'rgba(255, 255, 255, 0.8)' : BrandColors.textSecondary;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={{
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        borderRadius: 14,
+        backgroundColor: disabled ? disabledBackground : background,
+        borderWidth: variant === 'surface' ? 1 : 0,
+        borderColor: variant === 'surface' ? BrandColors.primarySoft : undefined,
+      }}>
+      <Text style={{ color: disabled ? disabledTextColor : textColor, fontWeight: '600' }}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export default function Chat() {
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const { messages, addMessage, addAssistantMessage, isResponding, setResponding, reset } = useChatStore();
   const addRecord = useRecordsStore((state) => state.addRecordFromMessages);
-  const [input, setInput] = useState('');
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingLevel, setRecordingLevel] = useState(0);
+  const recordingHandleRef = useRef<RecordingHandle | null>(null);
 
   const lastAssistantMessage = useMemo(
     () => [...messages].reverse().find((message) => message.role === 'assistant'),
@@ -63,20 +255,31 @@ export default function Chat() {
     });
   };
 
-  const send = async () => {
-    if (!input.trim() || isResponding) return;
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+      if (recordingHandleRef.current) {
+        void recordingHandleRef.current.stop({ discard: true });
+        recordingHandleRef.current = null;
+      }
+    };
+  }, []);
+
+  const sendTranscript = async (transcript: string) => {
+    if (!transcript.trim() || isResponding) return;
+
+    const text = transcript.trim();
 
     const userMessage: ChatMessage = {
       id: `${Date.now()}-user`,
       role: 'user',
-      text: input.trim(),
+      text,
       ts: Date.now(),
     };
 
     const conversation = [...messages, userMessage];
 
     addMessage(userMessage);
-    setInput('');
     scrollToEnd();
     setResponding(true);
 
@@ -85,12 +288,49 @@ export default function Chat() {
       const assistantReply = await mockLLMReply(conversation, keywords);
       const assistantMessage = addAssistantMessage(assistantReply);
       scrollToEnd();
-      await say(assistantMessage.text);
+      stopSpeaking();
+      await say(assistantMessage.text, {
+        onStart: () => setIsSpeaking(true),
+        onComplete: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
     } catch (error) {
       console.error(error);
       Alert.alert('대화 오류', '응답을 생성하지 못했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setResponding(false);
+    }
+  };
+
+  const handleToggleRecording = async () => {
+    if (isRecording) {
+      setIsRecording(false);
+      const handle = recordingHandleRef.current;
+      recordingHandleRef.current = null;
+      if (!handle) return;
+      try {
+        const transcript = await handle.stop();
+        if (transcript) {
+          await sendTranscript(transcript);
+        }
+      } catch (error) {
+        console.error(error);
+        Alert.alert('음성 입력 오류', '음성 인식 결과를 가져오지 못했습니다.');
+      } finally {
+        setRecordingLevel(0);
+      }
+      return;
+    }
+
+    try {
+      const handle = await startMockRecording({
+        onLevel: (level) => setRecordingLevel(level),
+      });
+      recordingHandleRef.current = handle;
+      setIsRecording(true);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('녹음 오류', '음성 입력을 시작할 수 없습니다.');
     }
   };
 
@@ -118,9 +358,16 @@ export default function Chat() {
       {
         text: '초기화',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
+          stopSpeaking();
+          setIsSpeaking(false);
+          if (recordingHandleRef.current) {
+            await recordingHandleRef.current.stop({ discard: true });
+            recordingHandleRef.current = null;
+          }
+          setIsRecording(false);
+          setRecordingLevel(0);
           reset();
-          setInput('');
         },
       },
     ]);
@@ -128,94 +375,128 @@ export default function Chat() {
 
   const replayAssistantVoice = () => {
     if (lastAssistantMessage) {
-      say(lastAssistantMessage.text);
+      stopSpeaking();
+      void say(lastAssistantMessage.text, {
+        onStart: () => setIsSpeaking(true),
+        onComplete: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      }).catch(() => setIsSpeaking(false));
     }
   };
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: '#fff' }}>
-      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
+      style={{ flex: 1, backgroundColor: BrandColors.background }}>
+      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, gap: 20 }}>
         <View
           style={{
+            backgroundColor: BrandColors.surface,
+            borderRadius: 28,
+            padding: 24,
+            gap: 16,
+            ...Shadows.card,
             flexDirection: 'row',
-            justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: 12,
           }}>
-          <View>
-            <Text style={{ fontSize: 24, fontWeight: '700' }}>기억 코치</Text>
-            <Text style={{ color: '#666' }}>AI와 대화하며 기억력을 관리해보세요.</Text>
+          <HaemayaMascot size={90} />
+          <View style={{ flex: 1, gap: 6, marginLeft: 16 }}>
+            <Text style={{ fontSize: 28, fontWeight: '800', color: BrandColors.textPrimary }}>해마 기억 코치</Text>
+            <Text style={{ color: BrandColors.textSecondary, lineHeight: 22 }}>
+              GPT 기반 코치가 어르신의 이야기를 정리하고, 필요한 케어를 제안해드립니다.
+            </Text>
           </View>
-          <View style={{ gap: 6 }}>
-            <Button title="요약 저장" onPress={handleSaveRecord} />
-            <Button title="새 대화" onPress={handleReset} />
-          </View>
-        </View>
-
-        <FlatList
-          ref={listRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <MessageBubble message={item} />}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingVertical: 16 }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: 80, paddingHorizontal: 24 }}>
-              <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 8 }}>첫 대화를 시작해보세요</Text>
-              <Text style={{ color: '#666', textAlign: 'center', lineHeight: 20 }}>
-                오늘 기억하고 싶은 일이나 걱정되는 점을 이야기하면, 기억 코치가 함께 정리해드려요.
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: 16,
+              borderRadius: 18,
+              borderWidth: 1,
+              borderColor: BrandColors.border,
+              backgroundColor: BrandColors.surfaceSoft,
+            }}>
+            <View>
+              <Text style={{ fontSize: 14, color: BrandColors.textSecondary }}>오늘의 대화 준비 완료</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>
+                음성으로 간편하게 기록하세요
               </Text>
             </View>
-          }
-          ListFooterComponent={
-            isResponding ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 8 }}>
-                <ActivityIndicator size="small" color="#4c6ef5" />
-                <Text style={{ color: '#4c6ef5' }}>기억 코치가 생각을 정리하고 있어요...</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <HeaderActionButton label="요약 저장" onPress={handleSaveRecord} disabled={isResponding} />
+              <HeaderActionButton label="새 대화" onPress={handleReset} variant="surface" disabled={isResponding} />
+            </View>
+          </View>
+        </View>
+
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: BrandColors.surface,
+            borderRadius: 32,
+            paddingVertical: 24,
+            paddingHorizontal: 20,
+            ...Shadows.card,
+          }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.textPrimary, marginBottom: 12 }}>
+            오늘의 대화
+          </Text>
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <MessageBubble message={item} />}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingVertical: 12 }}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', marginTop: 80, paddingHorizontal: 24, gap: 8 }}>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>
+                  첫 대화를 시작해보세요
+                </Text>
+                <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+                  오늘 기억하고 싶은 일이나 걱정되는 점을 이야기하면, 기억 코치가 함께 정리해드려요.
+                </Text>
               </View>
-            ) : null
-          }
-        />
+            }
+            ListFooterComponent={isResponding ? <TypingIndicator /> : <View style={{ height: 24 }} />}
+          />
+        </View>
       </View>
 
-      <View style={{ padding: 16, borderTopWidth: 1, borderColor: '#f1f3f5', backgroundColor: '#fff', gap: 8 }}>
+      <View
+        style={{
+          paddingHorizontal: 24,
+          paddingVertical: 20,
+          borderTopWidth: 1,
+          borderColor: BrandColors.border,
+          backgroundColor: BrandColors.surface,
+          gap: 18,
+          ...Shadows.card,
+        }}>
         {lastAssistantMessage ? (
-          <Pressable
-            onPress={replayAssistantVoice}
-            style={{
-              alignSelf: 'flex-start',
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              backgroundColor: '#f1f3f5',
-              borderRadius: 999,
-            }}>
-            <Text style={{ color: '#4c6ef5', fontWeight: '600' }}>마지막 답변 다시 듣기</Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Pressable
+              onPress={replayAssistantVoice}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                backgroundColor: BrandColors.surfaceSoft,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: BrandColors.border,
+              }}>
+              <Text style={{ color: BrandColors.primary, fontWeight: '600' }}>마지막 답변 다시 듣기</Text>
+            </Pressable>
+            <VoiceVisualizer active={isSpeaking} />
+          </View>
         ) : null}
-        <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: '#d7dce2', borderRadius: 16, padding: 8 }}>
-          <TextInput
-            style={{ flex: 1, paddingHorizontal: 12, fontSize: 16 }}
-            value={input}
-            placeholder="오늘은 어떤 이야기를 나눌까요?"
-            onChangeText={setInput}
-            multiline
-          />
-          <Pressable
-            onPress={send}
-            disabled={!input.trim() || isResponding}
-            style={{
-              backgroundColor: !input.trim() || isResponding ? '#adb5bd' : '#4c6ef5',
-              borderRadius: 12,
-              paddingHorizontal: 16,
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginLeft: 8,
-            }}>
-            <Text style={{ color: '#fff', fontWeight: '600' }}>{isResponding ? '전송중' : '전송'}</Text>
-          </Pressable>
-        </View>
+        <RecordButton
+          recording={isRecording}
+          level={recordingLevel}
+          onPress={handleToggleRecording}
+          disabled={isResponding}
+        />
       </View>
     </KeyboardAvoidingView>
   );

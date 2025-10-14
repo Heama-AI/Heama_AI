@@ -1,29 +1,101 @@
-import CardButton from '@/components/CardButton';
+import { HaemayaMascot } from '@/components/HaemayaMascot';
+import { BrandColors, Shadows } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
 import { router } from 'expo-router';
-import { ScrollView, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 export default function Home() {
   const userId = useAuthStore((state) => state.userId);
 
+  useEffect(() => {
+    if (userId) {
+      router.replace('/home');
+    }
+  }, [userId]);
+
   return (
-    <ScrollView contentContainerStyle={{ padding: 20 }}>
-      <Text style={{ fontSize: 28, fontWeight: '700', marginBottom: 6 }}>치매 관리 도우미</Text>
-      <Text style={{ fontSize: 16, color: '#666', marginBottom: 16 }}>대화와 게임으로 기억을 돌보고, 통계로 변화를 확인하세요.</Text>
-      <View style={{ gap: 8 }}>
-        <CardButton title="대화 시작하기" onPress={() => router.push('/chat')} />
-        <CardButton title="기록 모아보기" onPress={() => router.push('/records')} />
-        <CardButton title="통계 확인하기" onPress={() => router.push('/stats')} />
-        <CardButton title="맞춤 퀴즈 (게임)" onPress={() => router.push('/games')} />
-        {userId ? (
-          <CardButton title="마이페이지" onPress={() => router.push('/mypage')} />
-        ) : (
-          <>
-            <CardButton title="로그인" onPress={() => router.push('/auth/sign-in')} />
-            <CardButton title="회원가입" onPress={() => router.push('/auth/sign-up')} />
-          </>
-        )}
+    <ScrollView
+      style={{ flex: 1, backgroundColor: BrandColors.background }}
+      contentContainerStyle={{ padding: 24, paddingBottom: 40, gap: 24 }}>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 28,
+          padding: 24,
+          ...Shadows.card,
+          alignItems: 'center',
+          gap: 18,
+        }}>
+        <HaemayaMascot size={160} withBadge />
+        <View style={{ alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 32, fontWeight: '800', color: BrandColors.textPrimary }}>해마</Text>
+          <Text style={{ fontSize: 16, color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 22 }}>
+            음성 기반 케어 코치와 함께 어르신의 기억을 안전하게 기록하세요. 로그인하고 맞춤 케어를 시작해보세요.
+          </Text>
+        </View>
+        <View
+          style={{
+            marginTop: 24,
+            padding: 16,
+            borderRadius: 18,
+            backgroundColor: BrandColors.surfaceSoft,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            gap: 6,
+          }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.textPrimary }}>안심 케어 플랫폼</Text>
+          <Text style={{ fontSize: 14, color: BrandColors.textSecondary, lineHeight: 20 }}>
+            보호자와 함께 연동하여 대화 기록을 공유하고, 건강 지표를 실시간으로 확인할 수 있습니다.
+          </Text>
+        </View>
+      </View>
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 26,
+          padding: 24,
+          gap: 18,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>지금 시작하기</Text>
+        <Text style={{ fontSize: 14, color: BrandColors.textSecondary, lineHeight: 20 }}>
+          로그인 또는 회원가입 후 맞춤형 치매 케어 서비스를 이용하실 수 있습니다.
+        </Text>
+        <View style={{ gap: 12 }}>
+          <LandingButton label="로그인" onPress={() => router.push('/auth/sign-in')} />
+          <LandingButton label="회원가입" variant="outline" onPress={() => router.push('/auth/sign-up')} />
+        </View>
       </View>
     </ScrollView>
+  );
+}
+
+function LandingButton({
+  label,
+  onPress,
+  variant = 'solid',
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: 'solid' | 'outline';
+}) {
+  const backgroundColor = variant === 'solid' ? BrandColors.primary : BrandColors.surface;
+  const borderColor = variant === 'solid' ? 'transparent' : BrandColors.border;
+  const textColor = variant === 'solid' ? '#fff' : BrandColors.textPrimary;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 16,
+        borderRadius: 18,
+        alignItems: 'center',
+        backgroundColor,
+        borderWidth: 2,
+        borderColor,
+      }}>
+      <Text style={{ fontSize: 16, fontWeight: '700', color: textColor }}>{label}</Text>
+    </Pressable>
   );
 }
