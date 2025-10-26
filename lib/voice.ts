@@ -1,41 +1,124 @@
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
+
 type RecordingCallbacks = {
   onLevel?: (level: number) => void;
 };
 
+export interface RecordingResult {
+  fileUri: string;
+  mimeType: string;
+  durationMillis?: number;
+}
+
 export interface RecordingHandle {
-  stop: (options?: { discard?: boolean }) => Promise<string | undefined>;
+  stop: (options?: { discard?: boolean }) => Promise<RecordingResult | undefined>;
 }
 
-const SAMPLE_TRANSCRIPTS = [
-  '오늘은 식사를 했는지 기억이 잘 안나요.',
-  '산책을 다녀왔는데 너무 즐거웠어요.',
-  '약 복용 시간을 자꾸 놓치게 돼서 걱정이에요.',
-  '손주를 만나고 왔는데 기분이 정말 좋습니다.',
-  '최근 잠을 잘 이루지 못해 피곤해요.',
-];
+const MIME_TYPE = Platform.select({
+  web: 'audio/webm',
+  default: 'audio/m4a',
+});
 
-function pickSample() {
-  return SAMPLE_TRANSCRIPTS[Math.floor(Math.random() * SAMPLE_TRANSCRIPTS.length)];
+const RECORDING_AUDIO_MODE = {
+  allowsRecordingIOS: true,
+  playsInSilentModeIOS: true,
+  staysActiveInBackground: false,
+  interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+  interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+  shouldDuckAndroid: false,
+  playThroughEarpieceAndroid: false,
+};
+
+const PLAYBACK_AUDIO_MODE = {
+  allowsRecordingIOS: false,
+  playsInSilentModeIOS: true,
+  staysActiveInBackground: false,
+  interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+  interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+  shouldDuckAndroid: false,
+  playThroughEarpieceAndroid: false,
+};
+
+async function ensurePermissions() {
+  const { status } = await Audio.requestPermissionsAsync();
+  if (status !== 'granted') {
+    throw new Error('마이크 권한이 필요합니다.');
+  }
 }
 
-export async function startMockRecording(callbacks?: RecordingCallbacks): Promise<RecordingHandle> {
-  let running = true;
-  let currentLevel = 0.3;
+function meteringToLevel(metering?: number) {
+  if (typeof metering !== 'number' || Number.isNaN(metering)) return 0;
+  // Expo returns levels in dBFS where 0 is loudest and -160 is silence.
+  return Math.min(1, Math.max(0, (metering + 160) / 70));
+}
 
-  const interval = setInterval(() => {
-    if (!running) return;
-    currentLevel = Math.random();
-    callbacks?.onLevel?.(currentLevel);
-  }, 120);
+export async function startVoiceRecording(callbacks?: RecordingCallbacks): Promise<RecordingHandle> {
+  await ensurePermissions();
+  await Audio.setAudioModeAsync(RECORDING_AUDIO_MODE);
+
+  const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+
+  let levelInterval: NodeJS.Timeout | null = null;
+
+  if (callbacks?.onLevel) {
+    levelInterval = setInterval(async () => {
+      try {
+        const status = await recording.getStatusAsync();
+        if (!status.isRecording) return;
+        callbacks.onLevel?.(meteringToLevel(status.metering));
+      } catch {
+        // no-op: metering failures shouldn't break recording
+      }
+    }, 120);
+  }
 
   return {
     stop: async (options) => {
-      running = false;
-      clearInterval(interval);
+      if (levelInterval) {
+        clearInterval(levelInterval);
+        levelInterval = null;
+      }
+
+      try {
+        const status = await recording.getStatusAsync();
+        if (status.isRecording) {
+          await recording.stopAndUnloadAsync();
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('stopAndUnloadAsync failed – possibly already stopped', error);
+        }
+      }
+
       callbacks?.onLevel?.(0);
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      if (options?.discard) return undefined;
-      return pickSample();
+
+      const uri = recording.getURI();
+      if (!uri) {
+        await Audio.setAudioModeAsync(PLAYBACK_AUDIO_MODE).catch(() => undefined);
+        return undefined;
+      }
+
+      if (options?.discard) {
+        await FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => undefined);
+        await Audio.setAudioModeAsync(PLAYBACK_AUDIO_MODE).catch(() => undefined);
+        return undefined;
+      }
+
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (!fileInfo.exists) {
+        await Audio.setAudioModeAsync(PLAYBACK_AUDIO_MODE).catch(() => undefined);
+        return undefined;
+      }
+
+      await Audio.setAudioModeAsync(PLAYBACK_AUDIO_MODE).catch(() => undefined);
+
+      return {
+        fileUri: uri,
+        mimeType: MIME_TYPE ?? 'audio/m4a',
+        durationMillis: (await recording.getStatusAsync()).durationMillis,
+      };
     },
   };
 }

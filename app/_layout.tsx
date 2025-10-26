@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -37,6 +38,22 @@ export default function RootLayout() {
     void hydrateChat();
     void hydrateRecords();
   }, [hydrateChat, hydrateRecords]);
+
+  useEffect(() => {
+    void Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      shouldDuckAndroid: false,
+      playThroughEarpieceAndroid: false,
+    }).catch((error) => {
+      if (__DEV__) {
+        console.warn('Failed to configure audio mode', error);
+      }
+    });
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

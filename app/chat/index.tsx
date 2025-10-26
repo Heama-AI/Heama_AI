@@ -3,11 +3,13 @@ import { BrandColors, Shadows } from '@/constants/theme';
 import { mockLLMReply } from '@/lib/assistant';
 import { extractKeywords } from '@/lib/conversation';
 import { say, stopSpeaking } from '@/lib/speech';
-import { startMockRecording, type RecordingHandle } from '@/lib/voice';
+import { transcribeAudio } from '@/lib/stt';
+import { startVoiceRecording, type RecordingHandle } from '@/lib/voice';
 import { useChatStore } from '@/store/chatStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import type { ChatMessage } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -241,6 +243,7 @@ export default function Chat() {
   const addRecord = useRecordsStore((state) => state.addRecordFromMessages);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingLevel, setRecordingLevel] = useState(0);
   const recordingHandleRef = useRef<RecordingHandle | null>(null);
 
@@ -262,6 +265,7 @@ export default function Chat() {
         void recordingHandleRef.current.stop({ discard: true });
         recordingHandleRef.current = null;
       }
+      setIsTranscribing(false);
     };
   }, []);
 
@@ -303,27 +307,43 @@ export default function Chat() {
   };
 
   const handleToggleRecording = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('웹 미지원', '웹 환경에서는 음성 녹음을 지원하지 않습니다. 모바일 기기에서 이용해주세요.');
+      return;
+    }
+
     if (isRecording) {
       setIsRecording(false);
       const handle = recordingHandleRef.current;
       recordingHandleRef.current = null;
       if (!handle) return;
       try {
-        const transcript = await handle.stop();
-        if (transcript) {
-          await sendTranscript(transcript);
+        const recording = await handle.stop();
+        setRecordingLevel(0);
+        if (!recording) return;
+
+        setIsTranscribing(true);
+        try {
+          const transcript = await transcribeAudio(recording.fileUri, { language: 'ko' });
+          if (transcript) {
+            await sendTranscript(transcript);
+          }
+        } catch (error) {
+          console.error(error);
+          Alert.alert('음성 인식 오류', '음성을 텍스트로 변환하지 못했습니다.');
+        } finally {
+          setIsTranscribing(false);
+          await FileSystem.deleteAsync(recording.fileUri, { idempotent: true }).catch(() => undefined);
         }
       } catch (error) {
         console.error(error);
         Alert.alert('음성 입력 오류', '음성 인식 결과를 가져오지 못했습니다.');
-      } finally {
-        setRecordingLevel(0);
       }
       return;
     }
 
     try {
-      const handle = await startMockRecording({
+      const handle = await startVoiceRecording({
         onLevel: (level) => setRecordingLevel(level),
       });
       recordingHandleRef.current = handle;
@@ -383,6 +403,7 @@ export default function Chat() {
       }).catch(() => setIsSpeaking(false));
     }
   };
+
 
   return (
     <KeyboardAvoidingView
@@ -495,8 +516,11 @@ export default function Chat() {
           recording={isRecording}
           level={recordingLevel}
           onPress={handleToggleRecording}
-          disabled={isResponding}
+          disabled={isResponding || isTranscribing}
         />
+        {isTranscribing ? (
+          <Text style={{ textAlign: 'center', color: BrandColors.textSecondary }}>음성을 문자로 변환 중이에요...</Text>
+        ) : null}
       </View>
     </KeyboardAvoidingView>
   );
