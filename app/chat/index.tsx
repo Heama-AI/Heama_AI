@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 import {
   Alert,
   Animated,
@@ -22,7 +23,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function MessageBubble({ message }: { message: ChatMessage }) {
