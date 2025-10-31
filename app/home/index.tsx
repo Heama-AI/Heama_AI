@@ -138,12 +138,12 @@ export default function AuthenticatedHome() {
             ...Shadows.card,
           }}>
           <View style={{ flex: 1, gap: 10 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#DCA600' }}>해마 컬러링</Text>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#DCA600' }}>해마와 대화해요!</Text>
             <Text style={{ fontSize: isCompact ? 24 : 28, fontWeight: '900', color: BrandColors.textPrimary }}>
-              {heroGreeting} 오늘도 대화를 시작해볼까요?
+              {heroGreeting} 대화를 시작해볼까요?
             </Text>
             <Text style={{ color: '#7A5C00', lineHeight: 20 }}>
-              음성으로 이야기를 들려주면 코치가 돌봄 메모를 만들어드려요.
+              음성으로 이야기를 들려주면 돌봄 메모를 만들어드려요.
             </Text>
             <Pressable
               onPress={() => router.push('/chat')}

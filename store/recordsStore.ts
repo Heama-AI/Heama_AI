@@ -1,18 +1,25 @@
 import { buildQuiz, createId, deriveHighlights, deriveStats, extractKeywords, summariseConversation } from '@/lib/conversation';
-import { deleteRecord as deleteRecordFromStorage, loadRecords, saveRecord as saveRecordToStorage, updateRecordTitle as updateRecordTitleInStorage } from '@/lib/storage/recordsStorage';
+import { buildConversationBundle } from '@/lib/fhir/buildConversationBundle';
+import {
+  deleteRecord as deleteRecordFromStorage,
+  loadRecords,
+  saveRecord as saveRecordToStorage,
+  updateRecordTitle as updateRecordTitleInStorage,
+} from '@/lib/storage/recordsStorage';
 import { ChatMessage } from '@/types/chat';
 import { ConversationRecord } from '@/types/records';
 import { create } from 'zustand';
 
-function createRecord(messages: ChatMessage[], title?: string): ConversationRecord {
+function createRecord(messages: ChatMessage[], title?: string, recordIdOverride?: string): ConversationRecord {
   const now = Date.now();
   const keywords = extractKeywords(messages);
   const stats = deriveStats(messages);
   const highlights = deriveHighlights(messages);
   const summary = summariseConversation(messages, keywords);
-  const recordId = createId();
+  const recordId = recordIdOverride ?? createId();
+  const quiz = buildQuiz({ id: recordId, keywords, highlights, stats });
 
-  return {
+  const baseRecord = {
     id: recordId,
     title: title ?? `대화 기록 ${new Date(now).toLocaleDateString('ko-KR')}`,
     summary,
@@ -22,14 +29,30 @@ function createRecord(messages: ChatMessage[], title?: string): ConversationReco
     updatedAt: now,
     stats,
     messages,
-    quiz: buildQuiz({ id: recordId, keywords, highlights, stats }),
+    quiz,
+  };
+
+  return {
+    ...baseRecord,
+    fhirBundle: buildConversationBundle({
+      recordId: baseRecord.id,
+      title: baseRecord.title,
+      summary: baseRecord.summary,
+      highlights: baseRecord.highlights,
+      keywords: baseRecord.keywords,
+      createdAt: baseRecord.createdAt,
+      updatedAt: baseRecord.updatedAt,
+      stats: baseRecord.stats,
+      messages: baseRecord.messages,
+      quiz: baseRecord.quiz,
+    }),
   };
 }
 
 interface RecordsState {
   records: ConversationRecord[];
   hasHydrated: boolean;
-  addRecordFromMessages: (input: { messages: ChatMessage[]; title?: string }) => ConversationRecord;
+  addRecordFromMessages: (input: { messages: ChatMessage[]; title?: string; conversationId: string }) => ConversationRecord;
   removeRecord: (id: string) => void;
   getRecord: (id: string) => ConversationRecord | undefined;
   updateRecordTitle: (id: string, title: string) => void;
@@ -39,9 +62,11 @@ interface RecordsState {
 export const useRecordsStore = create<RecordsState>((set, get) => ({
   records: [],
   hasHydrated: false,
-  addRecordFromMessages: ({ messages, title }) => {
-    const record = createRecord(messages, title);
-    set((state) => ({ records: [record, ...state.records] }));
+  addRecordFromMessages: ({ messages, title, conversationId }) => {
+    const record = createRecord(messages, title, conversationId);
+    set((state) => ({
+      records: [record, ...state.records.filter((existing) => existing.id !== record.id)],
+    }));
     void saveRecordToStorage(record);
     return record;
   },
@@ -53,13 +78,34 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
   },
   getRecord: (id) => get().records.find((record) => record.id === id),
   updateRecordTitle: (id, title) => {
+    const existing = get().records.find((record) => record.id === id);
+    if (!existing) {
+      return;
+    }
     const nextUpdatedAt = Date.now();
+    const updatedRecord: ConversationRecord = {
+      ...existing,
+      title,
+      updatedAt: nextUpdatedAt,
+    };
+    const fhirBundle = buildConversationBundle({
+      recordId: updatedRecord.id,
+      title: updatedRecord.title,
+      summary: updatedRecord.summary,
+      highlights: updatedRecord.highlights,
+      keywords: updatedRecord.keywords,
+      createdAt: updatedRecord.createdAt,
+      updatedAt: updatedRecord.updatedAt,
+      stats: updatedRecord.stats,
+      messages: updatedRecord.messages,
+      quiz: updatedRecord.quiz,
+    });
     set((state) => ({
       records: state.records.map((record) =>
-        record.id === id ? { ...record, title, updatedAt: nextUpdatedAt } : record,
+        record.id === id ? { ...updatedRecord, fhirBundle } : record,
       ),
     }));
-    void updateRecordTitleInStorage(id, title);
+    void updateRecordTitleInStorage({ id, title, updatedAt: nextUpdatedAt, fhirBundle });
   },
   hydrate: async () => {
     if (get().hasHydrated) return;

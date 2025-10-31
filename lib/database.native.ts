@@ -26,9 +26,15 @@ async function applyMigrations(db: SQLite.SQLiteDatabase) {
       updated_at INTEGER NOT NULL,
       stats_json TEXT NOT NULL,
       messages_json TEXT NOT NULL,
-      quiz_json TEXT NOT NULL
+      quiz_json TEXT NOT NULL,
+      fhir_bundle_json TEXT
     );
   `);
+  try {
+    await db.execAsync(`ALTER TABLE records ADD COLUMN fhir_bundle_json TEXT`);
+  } catch (error) {
+    // ignore if the column already exists
+  }
   await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_chat_messages_ts ON chat_messages (ts);
   `);

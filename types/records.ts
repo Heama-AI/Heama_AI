@@ -1,4 +1,5 @@
 import type { ChatMessage } from '@/types/chat';
+import type { FhirConversationBundle } from '@/types/fhir';
 
 export type QuizChoice = string;
 
@@ -10,6 +11,15 @@ export type QuizQuestion = {
   explanation: string;
 };
 
+export type ConversationStats = {
+  totalTurns: number;
+  userTurns: number;
+  assistantTurns: number;
+  durationMinutes: number;
+  riskScore: number;
+  moodScore: number;
+};
+
 export interface ConversationRecord {
   id: string;
   title: string;
@@ -18,14 +28,8 @@ export interface ConversationRecord {
   keywords: string[];
   createdAt: number;
   updatedAt: number;
-  stats: {
-    totalTurns: number;
-    userTurns: number;
-    assistantTurns: number;
-    durationMinutes: number;
-    riskScore: number;
-    moodScore: number;
-  };
+  stats: ConversationStats;
   messages: ChatMessage[];
   quiz: QuizQuestion[];
+  fhirBundle: FhirConversationBundle;
 }

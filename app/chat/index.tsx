@@ -1,5 +1,5 @@
 import { BrandColors, Shadows } from '@/constants/theme';
-import { mockLLMReply } from '@/lib/assistant';
+import { getAssistantReply } from '@/lib/assistant';
 import { extractKeywords } from '@/lib/conversation';
 import { say, stopSpeaking } from '@/lib/speech';
 import { transcribeAudio } from '@/lib/stt';
@@ -10,7 +10,7 @@ import type { ChatMessage } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import {
   Alert,
@@ -24,6 +24,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle } from 'react-native-svg';
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === 'user';
@@ -32,25 +33,32 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       style={{
         marginVertical: 6,
         alignSelf: isUser ? 'flex-end' : 'flex-start',
-        maxWidth: '85%',
+        maxWidth: '82%',
+        width: 'auto',
       }}>
       <View
         style={{
-          backgroundColor: isUser ? BrandColors.primary : BrandColors.surface,
-          paddingVertical: 10,
-          paddingHorizontal: 14,
-          borderRadius: 16,
-          borderBottomRightRadius: isUser ? 0 : 16,
-          borderBottomLeftRadius: isUser ? 16 : 0,
+          backgroundColor: isUser ? BrandColors.primary : BrandColors.surfaceSoft,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+          borderRadius: 18,
+          borderBottomRightRadius: isUser ? 0 : 18,
+          borderBottomLeftRadius: isUser ? 18 : 0,
           borderWidth: isUser ? 0 : 1,
           borderColor: isUser ? undefined : BrandColors.border,
           ...(!isUser ? {} : Shadows.card),
         }}>
-        <Text style={{ color: isUser ? '#fff' : BrandColors.textPrimary, fontSize: 16, lineHeight: 22 }}>
+        <Text
+          style={{
+            color: isUser ? '#fff' : BrandColors.textPrimary,
+            fontSize: 16,
+            lineHeight: 24,
+            letterSpacing: 0.1,
+          }}>
           {message.text}
         </Text>
       </View>
-      <Text style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
+      <Text style={{ fontSize: 13, color: '#808080', marginTop: 6 }}>
         {new Date(message.ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
       </Text>
     </View>
@@ -87,108 +95,114 @@ function TypingIndicator() {
   );
 }
 
-function VoiceVisualizer({ active }: { active: boolean }) {
-  const [levels, setLevels] = useState([0.25, 0.45, 0.35, 0.5, 0.3]);
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const MAX_RECORDING_DURATION_MS = 60_000;
+const COUNTDOWN_UPDATE_INTERVAL_MS = 200;
 
-  useEffect(() => {
-    if (!active) {
-      setLevels([0.2, 0.2, 0.2, 0.2, 0.2]);
-      return undefined;
-    }
-
-    const interval = setInterval(() => {
-      setLevels([
-        Math.random(),
-        Math.random(),
-        Math.random(),
-        Math.random(),
-        Math.random(),
-      ]);
-    }, 120);
-
-    return () => clearInterval(interval);
-  }, [active]);
-
-  if (!active) {
-    return null;
-  }
-
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-end',
-        height: 26,
-        gap: 5,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 16,
-        backgroundColor: BrandColors.primarySoft,
-      }}>
-      {levels.map((level, index) => (
-        <View
-          key={index}
-          style={{
-            width: 4,
-            borderRadius: 2,
-            height: 8 + level * 16,
-            backgroundColor: BrandColors.primary,
-          }}
-        />
-      ))}
-    </View>
-  );
+function formatDuration(ms: number) {
+  const safeMs = Math.max(0, ms);
+  const totalSeconds = Math.ceil(safeMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, '0');
+  const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${seconds}`;
 }
 
 function RecordButton({
   recording,
   level,
+  countdownRatio,
+  countdownMs,
   onPress,
   disabled,
 }: {
   recording: boolean;
   level: number;
+  countdownRatio: number;
+  countdownMs: number;
   onPress: () => void;
   disabled?: boolean;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
+  const iconScale = useRef(new Animated.Value(1)).current;
+  const countdown = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.timing(scale, {
-      toValue: recording ? 1 + Math.min(level, 1) * 0.35 + 0.1 : 1,
+      toValue: recording ? 1 + Math.min(level, 1) * 0.2 + 0.05 : 1,
       duration: 120,
       useNativeDriver: true,
     }).start();
   }, [recording, level, scale]);
+
+  useEffect(() => {
+    Animated.timing(iconScale, {
+      toValue: recording ? 1 + Math.min(level, 1) * 0.3 : 1,
+      duration: 120,
+      useNativeDriver: true,
+    }).start();
+  }, [recording, level, iconScale]);
+
+  useEffect(() => {
+    Animated.timing(countdown, {
+      toValue: recording ? Math.max(0, Math.min(1, countdownRatio)) : 1,
+      duration: 160,
+      useNativeDriver: false,
+    }).start();
+  }, [countdownRatio, recording, countdown]);
+
+  const outerSize = 108;
+  const strokeWidth = 4;
+  const radius = (outerSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = countdown.interpolate({
+    inputRange: [0, 1],
+    outputRange: [circumference, 0],
+  });
 
   return (
     <Pressable onPress={onPress} disabled={disabled} style={{ alignItems: 'center' }}>
       <Animated.View
         style={{
           transform: [{ scale }],
-          width: 118,
-          height: 118,
-          borderRadius: 59,
+          width: outerSize,
+          height: outerSize,
+          borderRadius: outerSize / 2,
           backgroundColor: recording ? BrandColors.primarySoft : BrandColors.secondarySoft,
           alignItems: 'center',
           justifyContent: 'center',
           ...Shadows.floating,
         }}>
+        <Svg width={outerSize} height={outerSize} style={{ position: 'absolute' }}>
+          <Circle
+            cx={outerSize / 2}
+            cy={outerSize / 2}
+            r={radius}
+            stroke={recording ? BrandColors.accentSoft : 'rgba(255, 255, 255, 0.4)'}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+          {recording ? (
+            <AnimatedCircle
+              cx={outerSize / 2}
+              cy={outerSize / 2}
+              r={radius}
+              stroke={BrandColors.primary}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={`${circumference} ${circumference}`}
+              strokeDashoffset={dashOffset}
+              fill="none"
+              transform={`rotate(-90 ${outerSize / 2} ${outerSize / 2})`}
+            />
+          ) : null}
+        </Svg>
         <View
           style={{
-            position: 'absolute',
-            width: 118,
-            height: 118,
-            borderRadius: 59,
-            borderWidth: 2,
-            borderColor: recording ? BrandColors.accentSoft : 'rgba(255, 255, 255, 0.4)',
-          }}
-        />
-        <View
-          style={{
-            width: 94,
-            height: 94,
-            borderRadius: 47,
+            width: 88,
+            height: 88,
+            borderRadius: 44,
             backgroundColor: recording ? BrandColors.primary : BrandColors.primaryDark,
             alignItems: 'center',
             justifyContent: 'center',
@@ -196,12 +210,22 @@ function RecordButton({
             shadowOpacity: recording ? 0.35 : 0.2,
             shadowRadius: 14,
           }}>
-          <Ionicons name={recording ? 'stop' : 'mic'} size={32} color="#fff" />
+          <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+            <Ionicons name={recording ? 'stop' : 'mic'} size={32} color="#fff" />
+          </Animated.View>
         </View>
       </Animated.View>
-      <Text style={{ marginTop: 16, color: recording ? BrandColors.primary : BrandColors.textSecondary, fontSize: 14 }}>
-        {recording ? '녹음 중... 눌러서 종료' : '버튼을 눌러 말씀해주세요'}
-      </Text>
+      {recording ? (
+        <Text
+          style={{
+            marginTop: 12,
+            color: BrandColors.primary,
+            fontSize: 14,
+            textAlign: 'center',
+          }}>
+          남은 시간 {formatDuration(countdownMs)}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -220,7 +244,7 @@ function HeaderActionButton({
   style?: StyleProp<ViewStyle>;
 }) {
   const background = variant === 'primary' ? BrandColors.primary : BrandColors.primarySoft;
-  const textColor = variant === 'primary' ? '#fff' : BrandColors.primary;
+  const textColor = variant === 'primary' ? '#fff' : BrandColors.primaryDark;
   const disabledBackground = variant === 'primary' ? 'rgba(247, 201, 72, 0.35)' : BrandColors.primarySoft;
   const disabledTextColor = variant === 'primary' ? 'rgba(255, 255, 255, 0.8)' : BrandColors.textSecondary;
 
@@ -250,20 +274,29 @@ export default function Chat() {
   const { width } = useWindowDimensions();
   const isCompactHeader = width < 720;
   const isNarrow = width < 420;
+
   const listRef = useRef<FlatList<ChatMessage>>(null);
-  const { messages, addMessage, addAssistantMessage, isResponding, setResponding, reset } = useChatStore();
+  const { messages, addMessage, addAssistantMessage, isResponding, setResponding, reset, conversationId } =
+    useChatStore();
   const addRecord = useRecordsStore((state) => state.addRecordFromMessages);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [, setIsSpeaking] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingLevel, setRecordingLevel] = useState(0);
+  const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_RECORDING_DURATION_MS);
   const recordingHandleRef = useRef<RecordingHandle | null>(null);
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingCountdownStartedAtRef = useRef<number | null>(null);
+  const isStoppingRecordingRef = useRef(false);
   const insets = useSafeAreaInsets();
 
-  const lastAssistantMessage = useMemo(
-    () => [...messages].reverse().find((message) => message.role === 'assistant'),
-    [messages],
-  );
+  function clearRecordingCountdown() {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    recordingCountdownStartedAtRef.current = null;
+  }
 
   const scrollToEnd = () => {
     requestAnimationFrame(() => {
@@ -279,6 +312,7 @@ export default function Chat() {
         recordingHandleRef.current = null;
       }
       setIsTranscribing(false);
+      clearRecordingCountdown();
     };
   }, []);
 
@@ -302,20 +336,66 @@ export default function Chat() {
 
     try {
       const keywords = extractKeywords(conversation);
-      const assistantReply = await mockLLMReply(conversation, keywords);
+      const assistantReply = await getAssistantReply(conversation, keywords);
       const assistantMessage = addAssistantMessage(assistantReply);
       scrollToEnd();
+      setResponding(false);
       stopSpeaking();
-      await say(assistantMessage.text, {
+      void say(assistantMessage.text, {
         onStart: () => setIsSpeaking(true),
         onComplete: () => setIsSpeaking(false),
         onError: () => setIsSpeaking(false),
-      });
+      }).catch(() => setIsSpeaking(false));
     } catch (error) {
       console.error(error);
       Alert.alert('대화 오류', '응답을 생성하지 못했습니다. 잠시 후 다시 시도해주세요.');
     } finally {
       setResponding(false);
+    }
+  };
+
+  const stopActiveRecording = async (reason: 'manual' | 'timeout') => {
+    if (!isRecording || isStoppingRecordingRef.current) return;
+    isStoppingRecordingRef.current = true;
+    clearRecordingCountdown();
+    setIsRecording(false);
+    setRecordingRemainingMs(MAX_RECORDING_DURATION_MS);
+
+    const handle = recordingHandleRef.current;
+    recordingHandleRef.current = null;
+    if (!handle) {
+      setRecordingLevel(0);
+      isStoppingRecordingRef.current = false;
+      return;
+    }
+
+    try {
+      const recording = await handle.stop();
+      setRecordingLevel(0);
+      if (!recording) return;
+
+      if (reason === 'timeout') {
+        Alert.alert('녹음이 종료되었어요', '1분 제한 시간에 도달해 음성 입력을 마쳤어요.');
+      }
+
+      setIsTranscribing(true);
+      try {
+        const transcript = await transcribeAudio(recording.fileUri, { language: 'ko' });
+        if (transcript) {
+          await sendTranscript(transcript);
+        }
+      } catch (error) {
+        console.error(error);
+        Alert.alert('음성 인식 오류', '음성을 텍스트로 변환하지 못했습니다.');
+      } finally {
+        setIsTranscribing(false);
+        await FileSystem.deleteAsync(recording.fileUri, { idempotent: true }).catch(() => undefined);
+      }
+    } catch (error) {
+      console.error(error);
+      Alert.alert('음성 입력 오류', '음성 인식 결과를 가져오지 못했습니다.');
+    } finally {
+      isStoppingRecordingRef.current = false;
     }
   };
 
@@ -326,34 +406,11 @@ export default function Chat() {
     }
 
     if (isRecording) {
-      setIsRecording(false);
-      const handle = recordingHandleRef.current;
-      recordingHandleRef.current = null;
-      if (!handle) return;
-      try {
-        const recording = await handle.stop();
-        setRecordingLevel(0);
-        if (!recording) return;
-
-        setIsTranscribing(true);
-        try {
-          const transcript = await transcribeAudio(recording.fileUri, { language: 'ko' });
-          if (transcript) {
-            await sendTranscript(transcript);
-          }
-        } catch (error) {
-          console.error(error);
-          Alert.alert('음성 인식 오류', '음성을 텍스트로 변환하지 못했습니다.');
-        } finally {
-          setIsTranscribing(false);
-          await FileSystem.deleteAsync(recording.fileUri, { idempotent: true }).catch(() => undefined);
-        }
-      } catch (error) {
-        console.error(error);
-        Alert.alert('음성 입력 오류', '음성 인식 결과를 가져오지 못했습니다.');
-      }
+      void stopActiveRecording('manual');
       return;
     }
+
+    if (isStoppingRecordingRef.current) return;
 
     try {
       const handle = await startVoiceRecording({
@@ -361,6 +418,21 @@ export default function Chat() {
       });
       recordingHandleRef.current = handle;
       setIsRecording(true);
+      setRecordingLevel(0);
+      setRecordingRemainingMs(MAX_RECORDING_DURATION_MS);
+      clearRecordingCountdown();
+      recordingCountdownStartedAtRef.current = Date.now();
+      countdownIntervalRef.current = setInterval(() => {
+        if (!recordingCountdownStartedAtRef.current) return;
+        const elapsed = Date.now() - recordingCountdownStartedAtRef.current;
+        const remaining = Math.max(MAX_RECORDING_DURATION_MS - elapsed, 0);
+        setRecordingRemainingMs(remaining);
+        if (remaining <= 0) {
+          setRecordingRemainingMs(0);
+          clearRecordingCountdown();
+          void stopActiveRecording('timeout');
+        }
+      }, COUNTDOWN_UPDATE_INTERVAL_MS);
     } catch (error) {
       console.error(error);
       Alert.alert('녹음 오류', '음성 입력을 시작할 수 없습니다.');
@@ -377,6 +449,7 @@ export default function Chat() {
     const record = addRecord({
       messages: chatMessages.map((message) => ({ ...message })),
       title: chatMessages.find((message) => message.role === 'user')?.text.slice(0, 18) ?? undefined,
+      conversationId,
     });
 
     Alert.alert('저장 완료', '기록 페이지에서 대화 요약을 확인할 수 있어요.', [
@@ -398,72 +471,55 @@ export default function Chat() {
             await recordingHandleRef.current.stop({ discard: true });
             recordingHandleRef.current = null;
           }
+          clearRecordingCountdown();
           setIsRecording(false);
           setRecordingLevel(0);
+          setRecordingRemainingMs(MAX_RECORDING_DURATION_MS);
           reset();
         },
       },
     ]);
   };
 
-  const replayAssistantVoice = () => {
-    if (lastAssistantMessage) {
-      stopSpeaking();
-      void say(lastAssistantMessage.text, {
-        onStart: () => setIsSpeaking(true),
-        onComplete: () => setIsSpeaking(false),
-        onError: () => setIsSpeaking(false),
-      }).catch(() => setIsSpeaking(false));
-    }
-  };
-
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, gap: 20 }}>
-        <View
-          style={{
-            backgroundColor: BrandColors.surface,
-            borderRadius: 28,
-            padding: 24,
-            ...Shadows.card,
-          }}>
-          <View
-            style={{
-              width: '100%',
-              flexDirection: isCompactHeader ? 'column' : 'row',
-              alignItems: isCompactHeader ? 'flex-start' : 'stretch',
-              gap: isCompactHeader ? 16 : 18,
-            }}>
-            <View style={{ flex: 1, gap: 6 }}>
-              <Text
-                style={{
-                  fontSize: isNarrow ? 24 : 28,
-                  fontWeight: '800',
-                  color: BrandColors.textPrimary,
-                }}>
-                해마 기억 코치
-              </Text>
-              <Text style={{ color: BrandColors.textSecondary, lineHeight: 22 }}>
-                GPT 기반 코치가 어르신의 이야기를 정리하고, 필요한 케어를 제안해드립니다.
-              </Text>
-            </View>
+        <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, gap: 20 }}>
+          <View style={{ width: '100%' }}>
             <View
-              style={[
-                {
-                  padding: 16,
-                  borderRadius: 18,
-                  borderWidth: 1,
-                  borderColor: BrandColors.border,
-                  backgroundColor: BrandColors.surfaceSoft,
-                  gap: 12,
-                  flexShrink: 0,
-                },
-                isCompactHeader ? { width: '100%' } : { minWidth: 240 },
-              ]}>
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 14, color: BrandColors.textSecondary }}>오늘의 대화 준비 완료</Text>
+              style={{
+                width: '100%',
+                flexDirection: isCompactHeader ? 'column' : 'row',
+                alignItems: isCompactHeader ? 'flex-start' : 'stretch',
+                gap: isCompactHeader ? 16 : 18,
+              }}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text
+                  style={{
+                    fontSize: isNarrow ? 24 : 28,
+                    fontWeight: '800',
+                    color: BrandColors.textPrimary,
+                  }}>
+                  해마 기억 코치
+                </Text>
+                <Text style={{ color: BrandColors.textSecondary, lineHeight: 22 }}>
+                  GPT 기반 코치가 어르신의 이야기를 정리하고, 필요한 케어를 제안해드립니다.
+                </Text>
+              </View>
+              <View
+                style={[
+                  {
+                    paddingHorizontal: isCompactHeader ? 16 : 18,
+                    paddingVertical: isCompactHeader ? 10 : 12,
+                    borderRadius: 18,
+                    borderWidth: 1,
+                    borderColor: BrandColors.border,
+                    backgroundColor: BrandColors.surfaceSoft,
+                    gap: 10,
+                    alignSelf: 'stretch',
+                  },
+                  isCompactHeader ? { width: '100%' } : { flex: 1 },
+                ]}>
                 <Text
                   style={{
                     fontSize: isNarrow ? 16 : 18,
@@ -472,30 +528,29 @@ export default function Chat() {
                   }}>
                   음성으로 간편하게 기록하세요
                 </Text>
-              </View>
-              <View
-                style={{
-                  flexDirection: isCompactHeader ? 'column' : 'row',
-                  gap: 10,
-                  width: '100%',
-                }}>
-                <HeaderActionButton
-                  label="요약 저장"
-                  onPress={handleSaveRecord}
-                  disabled={isResponding}
-                  style={isCompactHeader ? { alignSelf: 'stretch' } : { flex: 1 }}
-                />
-                <HeaderActionButton
-                  label="새 대화"
-                  onPress={handleReset}
-                  variant="surface"
-                  disabled={isResponding}
-                  style={isCompactHeader ? { alignSelf: 'stretch' } : { flex: 1 }}
-                />
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    gap: 10,
+                    width: '100%',
+                  }}>
+                  <HeaderActionButton
+                    label="요약 저장"
+                    onPress={handleSaveRecord}
+                    disabled={isResponding}
+                    style={{ flex: 1 }}
+                  />
+                  <HeaderActionButton
+                    label="새 대화"
+                    onPress={handleReset}
+                    variant="surface"
+                    disabled={isResponding}
+                    style={{ flex: 1 }}
+                  />
+                </View>
               </View>
             </View>
           </View>
-        </View>
 
         <View
           style={{
@@ -503,7 +558,7 @@ export default function Chat() {
             backgroundColor: BrandColors.surface,
             borderRadius: 32,
             paddingVertical: 28,
-            paddingHorizontal: 22,
+            paddingHorizontal: isNarrow ? 18 : 22,
             ...Shadows.card,
           }}>
           <Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.textPrimary, marginBottom: 12 }}>
@@ -517,12 +572,10 @@ export default function Chat() {
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingVertical: 12 }}
             ListEmptyComponent={
-              <View style={{ alignItems: 'center', marginTop: 80, paddingHorizontal: 24, gap: 8 }}>
-                <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>
-                  첫 대화를 시작해보세요
-                </Text>
+              <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24, gap: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>대화를 시작해보세요</Text>
                 <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
-                  오늘 기억하고 싶은 일이나 걱정되는 점을 이야기하면, 기억 코치가 함께 정리해드려요.
+                  기억하고 싶은 일이나 걱정되는 점을 이야기해봐요!{"\n"} 해마가 함께 정리해드려요.
                 </Text>
               </View>
             }
@@ -539,34 +592,17 @@ export default function Chat() {
           borderTopWidth: 1,
           borderColor: BrandColors.border,
           backgroundColor: BrandColors.surface,
-          gap: 12,
         }}>
-        {lastAssistantMessage ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Pressable
-              onPress={replayAssistantVoice}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                backgroundColor: BrandColors.surfaceSoft,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: BrandColors.border,
-              }}>
-              <Text style={{ color: BrandColors.primary, fontWeight: '600' }}>마지막 답변 다시 듣기</Text>
-            </Pressable>
-            <VoiceVisualizer active={isSpeaking} />
-          </View>
-        ) : null}
-        <RecordButton
-          recording={isRecording}
-          level={recordingLevel}
-          onPress={handleToggleRecording}
-          disabled={isResponding || isTranscribing}
-        />
-        {isTranscribing ? (
-          <Text style={{ textAlign: 'center', color: BrandColors.textSecondary }}>음성을 문자로 변환 중이에요...</Text>
-        ) : null}
+        <View style={{ alignItems: 'center' }}>
+          <RecordButton
+            recording={isRecording}
+            level={recordingLevel}
+            countdownRatio={Math.max(0, Math.min(1, recordingRemainingMs / MAX_RECORDING_DURATION_MS))}
+            countdownMs={recordingRemainingMs}
+            onPress={handleToggleRecording}
+            disabled={isResponding || isTranscribing}
+          />
+        </View>
       </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

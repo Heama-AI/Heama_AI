@@ -1,3 +1,4 @@
+import { buildConversationBundle } from '@/lib/fhir/buildConversationBundle';
 import { getDatabase } from '@/lib/database';
 import type { ConversationRecord } from '@/types/records';
 
@@ -12,6 +13,7 @@ type RecordRow = {
   stats_json: string;
   messages_json: string;
   quiz_json: string;
+  fhir_bundle_json: string | null;
 };
 
 function parseJson<T>(input: string, fallback: T): T {
@@ -23,7 +25,7 @@ function parseJson<T>(input: string, fallback: T): T {
 }
 
 function mapRowToRecord(row: RecordRow): ConversationRecord {
-  return {
+  const baseRecord: Omit<ConversationRecord, 'fhirBundle'> = {
     id: row.id,
     title: row.title,
     summary: row.summary,
@@ -41,6 +43,28 @@ function mapRowToRecord(row: RecordRow): ConversationRecord {
     } as ConversationRecord['stats']),
     messages: parseJson<ConversationRecord['messages']>(row.messages_json, [] as ConversationRecord['messages']),
     quiz: parseJson<ConversationRecord['quiz']>(row.quiz_json, [] as ConversationRecord['quiz']),
+  };
+  const parsedFhir = row.fhir_bundle_json
+    ? parseJson<ConversationRecord['fhirBundle'] | null>(row.fhir_bundle_json, null)
+    : null;
+  const fhirBundle =
+    parsedFhir ??
+    buildConversationBundle({
+      recordId: baseRecord.id,
+      title: baseRecord.title,
+      summary: baseRecord.summary,
+      highlights: baseRecord.highlights,
+      keywords: baseRecord.keywords,
+      createdAt: baseRecord.createdAt,
+      updatedAt: baseRecord.updatedAt,
+      stats: baseRecord.stats,
+      messages: baseRecord.messages,
+      quiz: baseRecord.quiz,
+    });
+
+  return {
+    ...baseRecord,
+    fhirBundle,
   };
 }
 
@@ -63,7 +87,8 @@ export async function saveRecord(record: ConversationRecord) {
       updated_at,
       stats_json,
       messages_json,
-      quiz_json
+      quiz_json,
+      fhir_bundle_json
     ) VALUES (
       $id,
       $title,
@@ -74,7 +99,8 @@ export async function saveRecord(record: ConversationRecord) {
       $updatedAt,
       $stats,
       $messages,
-      $quiz
+      $quiz,
+      $fhirBundle
     )`,
     {
       $id: record.id,
@@ -87,6 +113,7 @@ export async function saveRecord(record: ConversationRecord) {
       $stats: JSON.stringify(record.stats),
       $messages: JSON.stringify(record.messages),
       $quiz: JSON.stringify(record.quiz),
+      $fhirBundle: JSON.stringify(record.fhirBundle),
     },
   );
 }
@@ -96,11 +123,24 @@ export async function deleteRecord(id: string) {
   await db.runAsync(`DELETE FROM records WHERE id = $id`, { $id: id });
 }
 
-export async function updateRecordTitle(id: string, title: string) {
+export async function updateRecordTitle(input: {
+  id: string;
+  title: string;
+  updatedAt: number;
+  fhirBundle: ConversationRecord['fhirBundle'];
+}) {
   const db = await getDatabase();
-  await db.runAsync(`UPDATE records SET title = $title, updated_at = $updatedAt WHERE id = $id`, {
-    $title: title,
-    $id: id,
-    $updatedAt: Date.now(),
-  });
+  await db.runAsync(
+    `UPDATE records
+     SET title = $title,
+         updated_at = $updatedAt,
+         fhir_bundle_json = $fhirBundle
+     WHERE id = $id`,
+    {
+      $title: input.title,
+      $id: input.id,
+      $updatedAt: input.updatedAt,
+      $fhirBundle: JSON.stringify(input.fhirBundle),
+    },
+  );
 }

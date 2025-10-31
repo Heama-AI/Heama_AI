@@ -1,3 +1,4 @@
+import { createId } from '@/lib/conversation';
 import { clearChatMessages, loadChatMessages, saveChatMessage } from '@/lib/storage/chatStorage';
 import { ChatMessage } from '@/types/chat';
 import { create } from 'zustand';
@@ -6,10 +7,12 @@ export interface ChatState {
   messages: ChatMessage[];
   isResponding: boolean;
   hasHydrated: boolean;
+  conversationId: string;
   addMessage: (message: ChatMessage) => void;
   addAssistantMessage: (text: string) => ChatMessage;
   setResponding: (responding: boolean) => void;
-  reset: () => void;
+  setConversationId: (conversationId: string) => void;
+  reset: (options?: { conversationId?: string }) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -17,6 +20,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isResponding: false,
   hasHydrated: false,
+  conversationId: createId(),
   addMessage: (message) => {
     set((state) => ({ messages: [...state.messages, message] }));
     void saveChatMessage(message);
@@ -33,8 +37,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return assistantMessage;
   },
   setResponding: (isResponding) => set({ isResponding }),
-  reset: () => {
-    set((state) => ({ messages: [], isResponding: false, hasHydrated: state.hasHydrated }));
+  setConversationId: (conversationId) => set({ conversationId }),
+  reset: (options) => {
+    const nextConversationId = options?.conversationId ?? createId();
+    set((state) => ({
+      messages: [],
+      isResponding: false,
+      hasHydrated: state.hasHydrated,
+      conversationId: nextConversationId,
+    }));
     void clearChatMessages();
   },
   hydrate: async () => {
@@ -53,11 +64,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           merged.set(message.id, message);
         }
         const ordered = Array.from(merged.values()).sort((a, b) => a.ts - b.ts);
-        return { messages: ordered, hasHydrated: true };
+        const conversationId =
+          ordered.length > 0 ? state.conversationId ?? ordered[0].id : state.conversationId ?? createId();
+        return { messages: ordered, hasHydrated: true, conversationId };
       });
     } catch (error) {
       console.error('Failed to hydrate chat messages', error);
-      set({ hasHydrated: true });
+      set((state) => ({ hasHydrated: true, conversationId: state.conversationId ?? createId() }));
     }
   },
 }));

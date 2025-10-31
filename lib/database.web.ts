@@ -19,6 +19,7 @@ type RecordRow = {
   stats_json: string;
   messages_json: string;
   quiz_json: string;
+  fhir_bundle_json: string;
 };
 
 type WebDatabase = {
@@ -64,7 +65,10 @@ let hydrated = false;
 function ensureHydrated() {
   if (hydrated) return;
   memoryStore.chatMessages = loadFromStorage<ChatRow[]>(CHAT_STORAGE_KEY, []);
-  memoryStore.records = loadFromStorage<RecordRow[]>(RECORDS_STORAGE_KEY, []);
+  memoryStore.records = loadFromStorage<RecordRow[]>(RECORDS_STORAGE_KEY, []).map((record) => ({
+    ...record,
+    fhir_bundle_json: record.fhir_bundle_json ?? '{}',
+  }));
   hydrated = true;
 }
 
@@ -103,6 +107,7 @@ function upsertRecordRow(params: Record<string, unknown>) {
     stats_json: String(params.$stats ?? '{}'),
     messages_json: String(params.$messages ?? '[]'),
     quiz_json: String(params.$quiz ?? '[]'),
+    fhir_bundle_json: String(params.$fhirBundle ?? '{}'),
   };
   const index = memoryStore.records.findIndex((item) => item.id === row.id);
   if (index >= 0) {
@@ -144,8 +149,9 @@ const webDatabase: WebDatabase = {
       const id = String(params.$id ?? '');
       const title = String(params.$title ?? '');
       const updatedAt = Number(params.$updatedAt ?? Date.now());
+      const fhirBundle = String(params.$fhirBundle ?? '{}');
       memoryStore.records = memoryStore.records.map((record) =>
-        record.id === id ? { ...record, title, updated_at: updatedAt } : record,
+        record.id === id ? { ...record, title, updated_at: updatedAt, fhir_bundle_json: fhirBundle } : record,
       );
       persistToStorage(RECORDS_STORAGE_KEY, memoryStore.records);
       return;
