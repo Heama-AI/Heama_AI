@@ -47,6 +47,7 @@
     "react-native-svg": "^15.14.0",
     "react-native-tts": "^4.1.1",
     "react-native-web": "~0.21.0",
+    "react-native-webview": "~13.6.4",
     "react-native-worklets": "0.5.1",
     "victory-native": "^41.20.1",
     "zustand": "^5.0.8"

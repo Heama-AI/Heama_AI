@@ -31,6 +31,13 @@ const SERVICE_TILES: ServiceTile[] = [
     route: '/games',
   },
   {
+    title: '같은 그림 찾기',
+    subtitle: '두 그림의 차이를 찾아요',
+    icon: 'color-palette',
+    color: '#FFE3F1',
+    route: '/games/spot-difference',
+  },
+  {
     title: '대화 기록',
     subtitle: '요약과 메모 관리',
     icon: 'documents',
@@ -166,6 +173,31 @@ export default function AuthenticatedHome() {
             </Pressable>
           </View>
           <HaemayaMascot size={isCompact ? 96 : 120} />
+        </View>
+
+        <View
+          style={{
+            backgroundColor: '#FFEAF5',
+            borderRadius: 24,
+            padding: 22,
+            gap: 12,
+            ...Shadows.card,
+          }}>
+          <Text style={{ fontSize: 20, fontWeight: '800', color: BrandColors.textPrimary }}>같은 그림 찾기</Text>
+          <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>
+            두 그림을 비교하며 집중력과 관찰력을 길러보세요.
+          </Text>
+          <Pressable
+            onPress={() => router.push('/games/spot-difference')}
+            style={{
+              alignSelf: 'flex-start',
+              backgroundColor: BrandColors.primary,
+              paddingHorizontal: 18,
+              paddingVertical: 10,
+              borderRadius: 999,
+            }}>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>바로 시작하기</Text>
+          </Pressable>
         </View>
 
         <View style={{ gap: 12 }}>

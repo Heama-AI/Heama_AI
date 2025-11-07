@@ -1,5 +1,4 @@
 import { buildQuiz, createId, deriveHighlights, deriveStats, extractKeywords, summariseConversation } from '@/lib/conversation';
-import { generateLocalKeywords } from '@/lib/summary/localKeywordExtractor';
 import { buildConversationBundle } from '@/lib/fhir/buildConversationBundle';
 import {
   deleteRecord as deleteRecordFromStorage,
@@ -7,6 +6,7 @@ import {
   saveRecord as saveRecordToStorage,
   updateRecordTitle as updateRecordTitleInStorage,
 } from '@/lib/storage/recordsStorage';
+import { generateLocalKeywords } from '@/lib/summary/localKeywordExtractor';
 import { ChatMessage } from '@/types/chat';
 import { ConversationRecord } from '@/types/records';
 import { create } from 'zustand';

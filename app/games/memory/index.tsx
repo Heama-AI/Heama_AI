@@ -1,7 +1,7 @@
-import { BrandColors, Shadows } from '@/constants/theme';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BrandColors, Shadows } from '@/constants/theme';
 
 type Card = {
   id: number;

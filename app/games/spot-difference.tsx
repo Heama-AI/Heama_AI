@@ -1,5 +1,5 @@
 import { BrandColors, Shadows } from '@/constants/theme';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -9,7 +9,10 @@ type Card = {
   matched: boolean;
 };
 
-const EMOJIS = ['🍎', '🍊', '🍋', '🍉', '🍇', '🍓', '🍒', '🍍'];
+const EMOJIS = ['🦋', '🌈', '🍄', '🌻', '🧸', '🎈', '🍰', '🚲'];
+const BOARD_SIZE = 4;
+const CARD_SIZE = 96;
+const PREVIEW_DELAY_MS = 500;
 
 function shuffle<T>(array: T[]): T[] {
   const arr = array.slice();
@@ -52,6 +55,13 @@ export default function MemoryGameRoute() {
   const isFinished = useMemo(() => deck.length > 0 && deck.every((c) => c.matched), [deck]);
   const minutes = Math.floor(time / 60);
   const seconds = String(time % 60).padStart(2, '0');
+  const gridRows = useMemo(
+    () =>
+      Array.from({ length: Math.ceil(deck.length / BOARD_SIZE) }, (_, rowIndex) =>
+        deck.slice(rowIndex * BOARD_SIZE, rowIndex * BOARD_SIZE + BOARD_SIZE),
+      ),
+    [deck],
+  );
 
   const handleCardPress = (index: number) => {
     if (disabled) return;
@@ -123,18 +133,23 @@ export default function MemoryGameRoute() {
         ) : null}
 
         <View style={styles.grid}>
-          {deck.map((card, index) => {
-            const isOpen = flipped.includes(index) || card.matched;
-            return (
-              <Pressable
-                key={card.id}
-                style={[styles.card, isOpen && styles.cardOpen, card.matched && styles.cardMatched]}
-                onPress={() => handleCardPress(index)}
-              >
-                <Text style={[styles.cardInner, isOpen && styles.cardInnerOpen]}>{isOpen ? card.emoji : '？'}</Text>
-              </Pressable>
-            );
-          })}
+          {gridRows.map((rowCards, rowIndex) => (
+            <View key={`row-${rowIndex}`} style={styles.gridRow}>
+              {rowCards.map((card, colIndex) => {
+                const index = rowIndex * BOARD_SIZE + colIndex;
+                const isOpen = flipped.includes(index) || card.matched;
+                return (
+                  <Pressable
+                    key={card.id}
+                    style={[styles.card, isOpen && styles.cardOpen, card.matched && styles.cardMatched]}
+                    onPress={() => handleCardPress(index)}
+                  >
+                    <Text style={[styles.cardInner, isOpen && styles.cardInnerOpen]}>{isOpen ? card.emoji : '？'}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
         </View>
       </View>
     </SafeAreaView>
@@ -188,15 +203,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
     gap: 12,
     marginTop: 8,
   },
+  gridRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
   card: {
-    width: 80,
-    height: 100,
+    width: CARD_SIZE,
+    height: CARD_SIZE,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -212,11 +229,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#bbf7d0',
   },
   cardInner: {
-    fontSize: 28,
+    fontSize: 36,
     color: '#ffffff',
   },
   cardInnerOpen: {
     color: '#111827',
   },
 });
-

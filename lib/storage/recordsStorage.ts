@@ -1,5 +1,5 @@
-import { buildConversationBundle } from '@/lib/fhir/buildConversationBundle';
 import { getDatabase } from '@/lib/database';
+import { buildConversationBundle } from '@/lib/fhir/buildConversationBundle';
 import type { ConversationRecord } from '@/types/records';
 
 type RecordRow = {
