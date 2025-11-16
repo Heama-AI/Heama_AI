@@ -38,6 +38,13 @@ const SERVICE_TILES: ServiceTile[] = [
     route: '/games/spot-difference',
   },
   {
+    title: '순서 기억하기',
+    subtitle: '화투 4장 따라 눌러요',
+    icon: 'timer',
+    color: '#FFE4D3',
+    route: '/games/sequence-memory',
+  },
+  {
     title: '대화 기록',
     subtitle: '요약과 메모 관리',
     icon: 'documents',
