@@ -60,14 +60,19 @@ const iosTarget = path.join(
 
 for (const file of modelFiles) {
   const sourcePath = path.join(sourceDir, file);
+  const sourceLabel = `./assets/models/${file}`;
 
   const androidDestination = path.join(androidTarget, file);
+  const androidLabel = path.relative(projectRoot, androidDestination);
+  console.log(`Copying   ${sourceLabel} ➜ ${androidLabel}`);
   copyFile(sourcePath, androidDestination);
 
   const iosDestination = path.join(iosTarget, file);
+  const iosLabel = path.relative(projectRoot, iosDestination);
+  console.log(`Copying   ${sourceLabel} ➜ ${iosLabel}`);
   copyFile(sourcePath, iosDestination);
 
-  console.log(`✅ ${file} → Android/iOS 동기화 완료`);
+  console.log(`✅ ${file} 동기화 완료\n`);
 }
 
 console.log('\n완료! 네이티브 프로젝트에 모델이 복사되었습니다.');

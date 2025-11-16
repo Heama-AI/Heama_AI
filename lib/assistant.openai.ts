@@ -6,7 +6,6 @@ const OPENAI_CHAT_ENDPOINT = process.env.EXPO_PUBLIC_OPENAI_CHAT_ENDPOINT ?? 'ht
 const OPENAI_CHAT_MODEL = process.env.EXPO_PUBLIC_OPENAI_CHAT_MODEL ?? 'gpt-4o-mini';
 const OPENAI_CHAT_TEMPERATURE = Number(process.env.EXPO_PUBLIC_OPENAI_CHAT_TEMPERATURE ?? '0.6');
 const OPENAI_CHAT_MAX_TOKENS = Number(process.env.EXPO_PUBLIC_OPENAI_CHAT_MAX_TOKENS ?? '320');
-
 type OpenAIChatMessage = {
   role: 'system' | 'user' | 'assistant';
   content: string;
@@ -25,30 +24,52 @@ function buildOpenAIRequestBody(messages: ChatMessage[], keywords?: string[]) {
       ? `최근 대화 키워드: ${keywords.slice(0, 6).join(', ')}`
       : undefined;
 
-  const openAIMessages: OpenAIChatMessage[] = [
+  const builtMessages: OpenAIChatMessage[] = [
     { role: 'system', content: SYSTEM_PROMPT },
     ...(assistantNotes ? [{ role: 'system', content: assistantNotes }] as OpenAIChatMessage[] : []),
     ...mapMessagesToOpenAI(messages),
   ];
 
-  return {
+  const body: Record<string, unknown> = {
     model: OPENAI_CHAT_MODEL,
-    temperature: OPENAI_CHAT_TEMPERATURE,
-    max_tokens: OPENAI_CHAT_MAX_TOKENS,
-    messages: openAIMessages,
+    messages: builtMessages,
   };
+
+  if (!Number.isNaN(OPENAI_CHAT_TEMPERATURE)) {
+    body.temperature = OPENAI_CHAT_TEMPERATURE;
+  }
+
+  if (!Number.isNaN(OPENAI_CHAT_MAX_TOKENS)) {
+    body.max_tokens = OPENAI_CHAT_MAX_TOKENS;
+  }
+
+  return body;
 }
 
-export async function getAssistantReply(messages: ChatMessage[], keywords?: string[]): Promise<string> {
+function extractResponseText(data: any): string | undefined {
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+  return undefined;
+}
+
+export async function getOpenAIAssistantReply(messages: ChatMessage[], keywords?: string[]): Promise<string> {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-  console.log("OPEN AI API")
+  const startedAt = Date.now();
+  const finish = (provider: string) => {
+    const elapsed = Date.now() - startedAt;
+    console.log(`[latency] Response(${provider}) ${elapsed}ms`);
+  };
   if (!apiKey) {
     if (__DEV__) {
       console.warn('EXPO_PUBLIC_OPENAI_API_KEY 미설정 – mock 응답 사용 중');
     }
-    return mockLLMReply(messages, keywords);
+    const reply = await mockLLMReply(messages, keywords);
+    finish('mock');
+    return reply;
   }
- 
+
   try {
     const body = buildOpenAIRequestBody(messages, keywords ?? extractKeywords(messages));
     const response = await fetch(OPENAI_CHAT_ENDPOINT, {
@@ -66,18 +87,21 @@ export async function getAssistantReply(messages: ChatMessage[], keywords?: stri
     }
 
     const data = await response.json();
-    const content: string | undefined = data?.choices?.[0]?.message?.content;
+    // console.log(JSON.stringify(data, null, 2))
+    const content = extractResponseText(data);
     if (!content) {
       throw new Error('OpenAI 응답 본문이 비어 있습니다.');
     }
 
-    return content.trim();
+    finish('openai');
+    return content;
   } catch (error) {
     console.error('OpenAI 응답 생성 실패 – mock 응답 사용', error);
-    return mockLLMReply(messages, keywords);
+    const fallback = await mockLLMReply(messages, keywords);
+    finish('mock-fallback');
+    return fallback;
   }
 }
 
 export { generateAssistantDraft } from '@/lib/assistant.shared';
 export { mockLLMReply };
-

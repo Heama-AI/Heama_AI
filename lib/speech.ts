@@ -11,6 +11,14 @@ type SpeechCallbacks = {
 
 type TTSProvider = 'expo' | 'openai';
 
+type OpenAITTSConfig = {
+  endpoint: string;
+  model: string;
+  voice: string;
+  format: string;
+  speed: number;
+};
+
 const OPENAI_TTS_ENDPOINT = 'https://api.openai.com/v1/audio/speech';
 const DEFAULT_OPENAI_TTS_MODEL = 'tts-1';
 const DEFAULT_OPENAI_TTS_VOICE = 'alloy';
@@ -22,10 +30,19 @@ let pendingFinalize: ((error?: Error) => void) | null = null;
 
 export function say(text: string, callbacks?: SpeechCallbacks) {
   const provider = resolveProvider();
-  if (provider === 'openai') {
-    return speakWithOpenAI(text, callbacks);
-  }
-  return speakWithExpo(text, callbacks);
+  const openaiConfig = provider === 'openai' ? resolveOpenAITTSConfig() : undefined;
+  const descriptor = provider === 'openai' ? `openai:${openaiConfig?.model}:${openaiConfig?.voice}` : 'expo:native';
+  const startedAt = Date.now();
+
+  console.log(`[ai] TTS provider=${descriptor}`);
+
+  const playbackPromise =
+    provider === 'openai' && openaiConfig ? speakWithOpenAI(text, callbacks, openaiConfig) : speakWithExpo(text, callbacks);
+
+  return playbackPromise.finally(() => {
+    const elapsed = Date.now() - startedAt;
+    console.log(`[latency] TTS(${descriptor}) ${elapsed}ms`);
+  });
 }
 
 export function stopSpeaking() {
@@ -96,7 +113,7 @@ function speakWithExpo(text: string, callbacks?: SpeechCallbacks) {
   });
 }
 
-async function speakWithOpenAI(text: string, callbacks?: SpeechCallbacks) {
+function resolveOpenAITTSConfig(): OpenAITTSConfig {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
   if (!apiKey) {
     throw new Error('OpenAI API Key(EXPO_PUBLIC_OPENAI_API_KEY)이 설정되지 않았습니다.');
@@ -107,6 +124,13 @@ async function speakWithOpenAI(text: string, callbacks?: SpeechCallbacks) {
   const voice = process.env.EXPO_PUBLIC_OPENAI_TTS_VOICE ?? DEFAULT_OPENAI_TTS_VOICE;
   const format = process.env.EXPO_PUBLIC_OPENAI_TTS_FORMAT ?? DEFAULT_OPENAI_TTS_FORMAT;
   const speed = Number(process.env.EXPO_PUBLIC_OPENAI_TTS_SPEED ?? '1');
+
+  return { endpoint, model, voice, format, speed };
+}
+
+async function speakWithOpenAI(text: string, callbacks: SpeechCallbacks | undefined, config: OpenAITTSConfig) {
+  const { endpoint, model, voice, format, speed } = config;
+  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY!;
 
   const response = await fetch(endpoint, {
     method: 'POST',
@@ -155,7 +179,8 @@ async function playAudioFile(fileUri: string, callbacks?: SpeechCallbacks) {
         if (currentSound) {
           currentSound.setOnPlaybackStatusUpdate(null);
         }
-        await disposeCurrentSound();
+        const delayDeleteMs = error ? 0 : 250;
+        await disposeCurrentSound(delayDeleteMs ? { delayDeleteMs } : undefined);
         if (pendingFinalize === finalize) {
           pendingFinalize = null;
         }
@@ -198,7 +223,7 @@ async function playAudioFile(fileUri: string, callbacks?: SpeechCallbacks) {
   });
 }
 
-async function disposeCurrentSound() {
+async function disposeCurrentSound(options?: { delayDeleteMs?: number }) {
   if (currentSound) {
     try {
       await currentSound.stopAsync();
@@ -214,7 +239,17 @@ async function disposeCurrentSound() {
   }
 
   if (currentSoundFileUri) {
-    await FileSystem.deleteAsync(currentSoundFileUri, { idempotent: true }).catch(() => undefined);
+    const targetUri = currentSoundFileUri;
     currentSoundFileUri = null;
+
+    const deleteFile = () => FileSystem.deleteAsync(targetUri, { idempotent: true }).catch(() => undefined);
+
+    if (options?.delayDeleteMs && options.delayDeleteMs > 0) {
+      setTimeout(() => {
+        void deleteFile();
+      }, options.delayDeleteMs);
+    } else {
+      await deleteFile();
+    }
   }
 }

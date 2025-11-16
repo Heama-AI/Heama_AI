@@ -1,3 +1,4 @@
+import { getOpenAIAssistantReply } from '@/lib/assistant.openai';
 import { SYSTEM_PROMPT, generateAssistantDraft, mockLLMReply } from '@/lib/assistant.shared';
 import { extractKeywords } from '@/lib/conversation';
 import { ensureModelAsset, type ModelAssetConfig } from '@/lib/llm/modelLoader';
@@ -12,7 +13,9 @@ type LocalModelConfig = {
   };
 };
 
+const DEFAULT_MODEL_ID_qw = 'qwen2.5-1.5b-instruct-q3_k_m';
 const DEFAULT_MODEL_ID = 'gemma-3n-E2B-it-Q4_K_S';
+const DEFAULT_MODEL_ID_G3 = 'gemma-3-1b-it-q4_0';
 const DEFAULT_BUNDLE_PATH = `models/${DEFAULT_MODEL_ID}.gguf`;
 
 const LOCAL_CHAT_TEMPERATURE = Number(process.env.EXPO_PUBLIC_LOCAL_LLM_TEMPERATURE ?? '0.6');
@@ -24,6 +27,7 @@ const MODEL_ID = process.env.EXPO_PUBLIC_LOCAL_LLM_MODEL_ID ?? DEFAULT_MODEL_ID;
 const MODEL_BUNDLE_PATH =
   process.env.EXPO_PUBLIC_LOCAL_LLM_BUNDLE_PATH ?? `models/${MODEL_ID === DEFAULT_MODEL_ID ? DEFAULT_MODEL_ID : MODEL_ID}.gguf`;
 const MODEL_FILENAME = process.env.EXPO_PUBLIC_LOCAL_LLM_FILENAME ?? undefined;
+const LOCAL_LLM_ENABLED = (process.env.EXPO_PUBLIC_LOCAL_LLM_ENABLED ?? 'true').toLowerCase() !== 'false';
 
 const LOCAL_MODEL: LocalModelConfig = {
   asset: {
@@ -85,12 +89,24 @@ function buildLocalMessages(messages: ChatMessage[], keywords: string[] = []) {
 }
 
 export async function getAssistantReply(messages: ChatMessage[], keywords?: string[]): Promise<string> {
+  const startedAt = Date.now();
+  const finish = (label: string) => {
+    const elapsed = Date.now() - startedAt;
+    console.log(`[latency] Response(${label}) ${elapsed}ms`);
+  };
+
+  if (!LOCAL_LLM_ENABLED) {
+    const remote = await getOpenAIAssistantReply(messages, keywords);
+    finish('openai');
+    return remote;
+  }
+
   try {
     const limitedMessages = messages.slice(-10);
     const resolvedKeywords = keywords ?? extractKeywords(limitedMessages);
     const llamaMessages = buildLocalMessages(limitedMessages, resolvedKeywords);
     const context = await loadContext();
-    console.log("OPEN AI LOCAL MODEL")
+    console.log(`[ai] Response provider=local model=${LOCAL_MODEL.asset.id}`);
 
     let output = '';
     const result = await context.completion(
@@ -115,12 +131,17 @@ export async function getAssistantReply(messages: ChatMessage[], keywords?: stri
 
     const cleaned = output.trim();
     if (cleaned.length === 0) {
-      return generateAssistantDraft(messages, resolvedKeywords);
+      const draft = generateAssistantDraft(messages, resolvedKeywords);
+      finish(`local-empty:${LOCAL_MODEL.asset.id}`);
+      return draft;
     }
+    finish(`local:${LOCAL_MODEL.asset.id}`);
     return cleaned;
   } catch (error) {
     console.error('로컬 LLM 응답 생성 실패 – mock 응답 사용', error);
-    return mockLLMReply(messages, keywords);
+    const fallback = await mockLLMReply(messages, keywords);
+    finish(`local-mock:${LOCAL_MODEL.asset.id}`);
+    return fallback;
   }
 }
 

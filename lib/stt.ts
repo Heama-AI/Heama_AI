@@ -17,10 +17,23 @@ export async function transcribeAudio(fileUri: string, options?: TranscriptionOp
   await ensureRecordingExists(fileUri);
 
   const provider = resolveProvider();
-  if (provider === 'google') {
-    return transcribeWithGoogle(fileUri, options);
+  const modelLabel =
+    provider === 'google'
+      ? process.env.EXPO_PUBLIC_GOOGLE_SPEECH_MODEL ?? 'default-google'
+      : process.env.EXPO_PUBLIC_TRANSCRIBE_MODEL ?? OPENAI_MODEL;
+
+  console.log(`[ai] STT provider=${provider} model=${modelLabel}`);
+
+  const startedAt = Date.now();
+  try {
+    if (provider === 'google') {
+      return await transcribeWithGoogle(fileUri, options);
+    }
+    return await transcribeWithOpenAI(fileUri, options);
+  } finally {
+    const elapsed = Date.now() - startedAt;
+    console.log(`[latency] STT(${provider}:${modelLabel}) ${elapsed}ms`);
   }
-  return transcribeWithOpenAI(fileUri, options);
 }
 
 function resolveProvider(): STTProvider {

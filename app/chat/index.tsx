@@ -21,6 +21,7 @@ import {
   Pressable,
   Text,
   View,
+  TextInput,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -284,6 +285,7 @@ export default function Chat() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingLevel, setRecordingLevel] = useState(0);
   const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_RECORDING_DURATION_MS);
+  const [textInput, setTextInput] = useState('');
   const recordingHandleRef = useRef<RecordingHandle | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordingCountdownStartedAtRef = useRef<number | null>(null);
@@ -352,6 +354,13 @@ export default function Chat() {
     } finally {
       setResponding(false);
     }
+  };
+
+  const handleSendTextMessage = () => {
+    const trimmed = textInput.trim();
+    if (!trimmed || isResponding) return;
+    setTextInput('');
+    void sendTranscript(trimmed);
   };
 
   const stopActiveRecording = async (reason: 'manual' | 'timeout') => {
@@ -559,58 +568,109 @@ export default function Chat() {
             </View>
           </View>
 
+          <View
+            style={{
+              flex: 1.15,
+              backgroundColor: BrandColors.surface,
+              borderRadius: 32,
+              paddingVertical: 28,
+              paddingHorizontal: isNarrow ? 18 : 22,
+              ...Shadows.card,
+            }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.textPrimary, marginBottom: 12 }}>
+              오늘의 대화
+            </Text>
+            <FlatList
+              ref={listRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => <MessageBubble message={item} />}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingVertical: 12 }}
+              ListEmptyComponent={
+                <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24, gap: 10 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>대화를 시작해보세요</Text>
+                  <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+                    기억하고 싶은 일이나 걱정되는 점을 이야기해봐요!{"\n"} 해마가 함께 정리해드려요.
+                  </Text>
+                </View>
+              }
+              ListFooterComponent={isResponding ? <TypingIndicator /> : <View style={{ height: 24 }} />}
+            />
+          </View>
+        </View>
+
         <View
           style={{
-            flex: 1.15,
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 12 + insets.bottom,
+            borderTopWidth: 1,
+            borderColor: BrandColors.border,
             backgroundColor: BrandColors.surface,
-            borderRadius: 32,
-            paddingVertical: 28,
-            paddingHorizontal: isNarrow ? 18 : 22,
-            ...Shadows.card,
+            gap: 14,
           }}>
-          <Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.textPrimary, marginBottom: 12 }}>
-            오늘의 대화
-          </Text>
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <MessageBubble message={item} />}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingVertical: 12 }}
-            ListEmptyComponent={
-              <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24, gap: 10 }}>
-                <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>대화를 시작해보세요</Text>
-                <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
-                  기억하고 싶은 일이나 걱정되는 점을 이야기해봐요!{"\n"} 해마가 함께 정리해드려요.
-                </Text>
-              </View>
-            }
-            ListFooterComponent={isResponding ? <TypingIndicator /> : <View style={{ height: 24 }} />}
-          />
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              borderWidth: 1,
+              borderColor: BrandColors.border,
+              borderRadius: 18,
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              backgroundColor: BrandColors.surfaceSoft,
+            }}>
+            <TextInput
+              style={{
+                flex: 1,
+                minHeight: 20,
+                maxHeight: 96,
+                color: BrandColors.textPrimary,
+                fontSize: 16,
+                textAlignVertical: 'center',
+              }}
+              value={textInput}
+              onChangeText={setTextInput}
+              placeholder="텍스트로 입력할 수 있어요!"
+              placeholderTextColor={BrandColors.textSecondary}
+              multiline
+              maxLength={400}
+              editable={!isResponding}
+              returnKeyType="send"
+              blurOnSubmit
+              onSubmitEditing={handleSendTextMessage}
+            />
+            <Pressable
+              onPress={handleSendTextMessage}
+              disabled={!textInput.trim() || isResponding}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: !textInput.trim() || isResponding ? BrandColors.surface : BrandColors.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <Ionicons
+                name="send"
+                size={20}
+                color={!textInput.trim() || isResponding ? BrandColors.textSecondary : '#fff'}
+              />
+            </Pressable>
+          </View>
+          <View style={{ alignItems: 'center' }}>
+            <RecordButton
+              recording={isRecording}
+              level={recordingLevel}
+              countdownRatio={Math.max(0, Math.min(1, recordingRemainingMs / MAX_RECORDING_DURATION_MS))}
+              countdownMs={recordingRemainingMs}
+              onPress={handleToggleRecording}
+              disabled={isResponding || isTranscribing}
+            />
+          </View>
         </View>
-      </View>
-
-      <View
-        style={{
-          paddingHorizontal: 20,
-          paddingTop: 12,
-          paddingBottom: 12 + insets.bottom,
-          borderTopWidth: 1,
-          borderColor: BrandColors.border,
-          backgroundColor: BrandColors.surface,
-        }}>
-        <View style={{ alignItems: 'center' }}>
-          <RecordButton
-            recording={isRecording}
-            level={recordingLevel}
-            countdownRatio={Math.max(0, Math.min(1, recordingRemainingMs / MAX_RECORDING_DURATION_MS))}
-            countdownMs={recordingRemainingMs}
-            onPress={handleToggleRecording}
-            disabled={isResponding || isTranscribing}
-          />
-        </View>
-      </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
