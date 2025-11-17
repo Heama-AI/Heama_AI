@@ -17,11 +17,10 @@
 **해마(HAEMA)**는 초고령 사회의 가장 큰 건강 문제 중 하나인 '치매'를 가정 내에서 효과적으로 관리하고 조기에 발견할 수 있도록 돕는 AI 기반 모바일 헬스케어 서비스입니다. 기존의 파편화된 진단, 훈련, 교감 서비스를 하나로 통합하여, 사용자가 일상적인 대화를 나누는 것만으로도 자신의 인지 건강 상태를 지속적으로 모니터링하고 관리할 수 있는 통합 솔루션을 제공합니다.
 
 단순한 챗봇을 넘어, 당신의 소중한 기억을 지켜주는 든든한 친구가 되어 드립니다.
-
+<p align="center">
 <img width="577" height="1172" alt="image" src="https://github.com/user-attachments/assets/202128dd-f29e-462b-b1bc-5ad9c0fd8420" />
-
 <img width="577" height="1172" alt="image" src="https://github.com/user-attachments/assets/8650f8c5-7bde-4935-a5a1-83dbca611c1a" />
-
+</p>
 ## ✨ 주요 기능 (Features)
 
 ### 📊 실시간 인지 건강 모니터링
