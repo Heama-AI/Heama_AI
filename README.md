@@ -57,7 +57,3 @@
 | **AI Models** | `gpt-4o-mini`(상담), `Gemma-3-270m`(온디바이스), `XGBoost`/`LSTM`(위험도 예측) |
 | **Standards**| `HL7 FHIR` (의료 데이터 표준) |
 | **Infra** | `Docker`, `AWS/GCP` (예정) |
-
-
-### 설치 및 실행
-1. **Repository 클론:**
