@@ -4,6 +4,7 @@
 <p align="center">
   <img width="200" alt="image" src="https://github.com/user-attachments/assets/a5510d7c-7c7c-4e14-9406-e239dd350beb" />
 </p>
+
 [![React Native](https://img.shields.io/badge/React%20Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactnative.dev/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
