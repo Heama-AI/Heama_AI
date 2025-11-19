@@ -1,19 +1,22 @@
 import { BrandColors, Shadows } from '@/constants/theme';
 import {
-  summarizeSpeechMetrics,
   evaluateSpeechMetricsChange,
-  type SpeechMetricsSummary,
-  type SpeechMetricsChangeSummary,
+  summarizeSpeechMetrics,
   type MetricLevel,
+  type SpeechMetricsChangeSummary,
+  type SpeechMetricsSummary,
 } from '@/lib/analysis/speechMetrics';
+import type { GameKind, GameResult } from '@/lib/storage/gameStatsStorage';
 import { supabase } from '@/lib/supabase';
+import { summarizeGameResults, useGameStatsStore } from '@/store/gameStatsStore';
 import { usePhotoNotesStore } from '@/store/photoNotesStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import type { PhotoNote } from '@/types/photoNote';
 import type { SpeechMetrics } from '@/types/speech';
-import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { LineChart } from 'react-native-chart-kit';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface DailyDataPoint {
@@ -59,10 +62,21 @@ export default function Stats() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const stackSummaryCards = width < 520;
-  const [activeTab, setActiveTab] = useState<'conversation' | 'photo'>('conversation');
+  const [activeTab, setActiveTab] = useState<'conversation' | 'game' | 'photo'>('conversation');
   const [photoEntries, setPhotoEntries] = useState<PhotoMetricsEntry[]>([]);
   const [photoMetricsLoading, setPhotoMetricsLoading] = useState(true);
   const [photoMetricsError, setPhotoMetricsError] = useState<string | null>(null);
+  const hydrateGameStats = useGameStatsStore((state) => state.hydrate);
+  const gameStatsHydrated = useGameStatsStore((state) => state.hasHydrated);
+  const gameResults = useGameStatsStore((state) => state.results);
+  const [graphKind, setGraphKind] = useState<GameKind | null>(null);
+
+  useEffect(() => {
+    if (!gameStatsHydrated) {
+      void hydrateGameStats();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameStatsHydrated]);
 
   const { summary, dailyTrend } = useMemo(() => {
     if (records.length === 0) {
@@ -220,6 +234,7 @@ export default function Stats() {
           backgroundColor: BrandColors.surface,
         }}>
         <TabButton label="대화 통계" active={activeTab === 'conversation'} onPress={() => setActiveTab('conversation')} />
+        <TabButton label="게임 통계" active={activeTab === 'game'} onPress={() => setActiveTab('game')} />
         <TabButton label="사진 설명" active={activeTab === 'photo'} onPress={() => setActiveTab('photo')} />
       </View>
 
@@ -229,6 +244,12 @@ export default function Stats() {
           dailyTrend={dailyTrend}
           stackSummaryCards={stackSummaryCards}
         />
+      ) : activeTab === 'game' ? (
+        <GameStatsSection
+          results={gameResults}
+          stackSummaryCards={stackSummaryCards}
+          onOpenGraph={setGraphKind}
+        />
       ) : (
         <PhotoMetricsSection
           photoMetrics={photoMetrics}
@@ -236,6 +257,12 @@ export default function Stats() {
           error={photoMetricsError}
         />
       )}
+      <GameGraphModal
+        visible={graphKind !== null}
+        onClose={() => setGraphKind(null)}
+        kind={graphKind}
+        data={graphKind ? buildGameRunSeries(gameResults, graphKind) : []}
+      />
       </ScrollView>
     </SafeAreaView>
   );
@@ -303,6 +330,131 @@ function ConversationStatsSection({
   );
 }
 
+function GameStatsSection({
+  results,
+  stackSummaryCards,
+  onOpenGraph,
+}: {
+  results: GameResult[];
+  stackSummaryCards: boolean;
+  onOpenGraph: (kind: GameKind) => void;
+}) {
+  const sequenceSummary = summarizeGameResults(results, 'sequence');
+  const matchingSummary = summarizeGameResults(results, 'matching');
+  const recent = results.slice(0, 6);
+
+  const renderSummaryRow = (title: string, summary: ReturnType<typeof summarizeGameResults>, kind: GameKind) => (
+    <View style={{ gap: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>{title}</Text>
+        <Pressable
+          onPress={() => onOpenGraph(kind)}
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            backgroundColor: BrandColors.surface,
+          }}>
+          <Text style={{ color: BrandColors.textSecondary, fontWeight: '600' }}>그래프</Text>
+        </Pressable>
+      </View>
+      {summary.total === 0 ? (
+        <Text style={{ color: BrandColors.textSecondary }}>아직 데이터가 없습니다. 게임을 플레이해 주세요.</Text>
+      ) : (
+        <View style={{ flexDirection: stackSummaryCards ? 'column' : 'row', gap: 12, flexWrap: 'wrap' }}>
+          <SummaryCard
+            label="총 플레이"
+            value={`${summary.total}회`}
+            accent={BrandColors.primary}
+            style={stackSummaryCards ? { width: '100%' } : undefined}
+          />
+          <SummaryCard
+            label="성공률"
+            value={`${summary.successRate}%`}
+            accent={BrandColors.primaryDark}
+            style={stackSummaryCards ? { width: '100%' } : undefined}
+          />
+          <SummaryCard
+            label="평균 정답률"
+            value={`${summary.averageAccuracy}%`}
+            accent={BrandColors.accent}
+            style={stackSummaryCards ? { width: '100%' } : undefined}
+          />
+          <SummaryCard
+            label="평균 소요 시간"
+            value={formatDuration(summary.averageDurationMs)}
+            accent={BrandColors.textSecondary}
+            style={stackSummaryCards ? { width: '100%' } : undefined}
+          />
+        </View>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={{ gap: 20 }}>
+      {renderSummaryRow('순서 기억하기', sequenceSummary, 'sequence')}
+      {renderSummaryRow('같은 그림 찾기', matchingSummary, 'matching')}
+
+      <View style={{ gap: 10 }}>
+        <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>최근 기록</Text>
+        {recent.length === 0 ? (
+          <Text style={{ color: BrandColors.textSecondary }}>기록이 없어요.</Text>
+        ) : (
+          recent.map((result) => {
+            const accuracy = result.totalTasks > 0 ? Math.round((result.correctTasks / result.totalTasks) * 100) : 0;
+            return (
+              <View
+                key={result.id}
+                style={{
+                  backgroundColor: BrandColors.surface,
+                  borderRadius: 16,
+                  padding: 14,
+                  borderWidth: 1,
+                  borderColor: BrandColors.border,
+                }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ fontWeight: '700', color: BrandColors.textPrimary }}>
+                    {result.kind === 'sequence' ? '순서 기억하기' : '같은 그림 찾기'}
+                  </Text>
+                  <Text style={{ color: BrandColors.textSecondary }}>
+                    {new Date(result.playedAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })}
+                  </Text>
+                </View>
+                <Text style={{ color: BrandColors.textSecondary }}>
+                  정답률 {accuracy}% · 소요 {formatDuration(result.durationMs)} · 시도 {result.attempts}회
+                </Text>
+              </View>
+            );
+          })
+        )}
+      </View>
+    </View>
+  );
+}
+
+function buildGameRunSeries(results: GameResult[], kind: GameKind, limit = 12) {
+  const filtered = results.filter((r) => r.kind === kind);
+  const latest = filtered.slice(0, limit).reverse(); // 오래된 순으로
+  const totalRuns = filtered.length;
+  return latest.map((r, idx) => {
+    const runNumber = totalRuns - (latest.length - 1 - idx);
+    const base = {
+      label: `${runNumber}회차`,
+      metric: 0,
+      avgDurationMs: r.durationMs,
+    };
+    if (kind === 'matching') {
+      return { ...base, metric: r.attempts ?? 0 };
+    }
+    // sequence-memory: 연속 성공 라운드(저장된 streak) 기준
+    const streak = typeof r.meta?.streak === 'number' ? r.meta.streak : r.success ? 1 : 0;
+    return { ...base, metric: streak };
+  });
+}
+
 function PhotoMetricsSection({
   photoMetrics,
   loading,
@@ -313,6 +465,7 @@ function PhotoMetricsSection({
   error: string | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showTrend, setShowTrend] = useState(false);
 
   useEffect(() => {
     setSelectedId(photoMetrics.entries[0]?.id ?? null);
@@ -321,6 +474,21 @@ function PhotoMetricsSection({
   const activeEntry = selectedId
     ? photoMetrics.entries.find((entry) => entry.id === selectedId) ?? photoMetrics.entries[0]
     : photoMetrics.entries[0];
+
+  const speechTrend = useMemo(() => {
+    const chronological = photoMetrics.entries
+      .filter((entry) => entry.metrics)
+      .sort((a, b) => a.updatedAt - b.updatedAt)
+      .map((entry) => ({
+        label: new Date(entry.updatedAt).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }),
+        wpm: entry.metrics?.speechRateWpm ? Number(entry.metrics.speechRateWpm.toFixed(0)) : 0,
+        pauseSec: entry.metrics?.meanPauseDurationSec ? Number(entry.metrics.meanPauseDurationSec.toFixed(1)) : 0,
+      }));
+    return {
+      points: chronological,
+      enabled: chronological.length >= 2,
+    };
+  }, [photoMetrics.entries]);
   return (
     <View style={{ gap: 20 }}>
       <View style={{ gap: 6 }}>
@@ -330,14 +498,17 @@ function PhotoMetricsSection({
         </Text>
       </View>
 
-      <View
+      <Pressable
+        onPress={() => speechTrend.enabled && setShowTrend(true)}
+        disabled={!speechTrend.enabled}
         style={{
           borderRadius: 22,
           padding: 18,
           borderWidth: 1,
-          borderColor: BrandColors.border,
+          borderColor: speechTrend.enabled ? BrandColors.border : BrandColors.border,
           backgroundColor: BrandColors.surface,
-          gap: 6,
+          gap: 10,
+          opacity: speechTrend.enabled ? 1 : 0.6,
           ...Shadows.card,
         }}>
         <Text style={{ color: BrandColors.textSecondary }}>총 측정 횟수</Text>
@@ -345,7 +516,10 @@ function PhotoMetricsSection({
         <Text style={{ color: BrandColors.textSecondary }}>
           한 달에 한 번 이상 기록하면 추세를 더 정확히 볼 수 있어요.
         </Text>
-      </View>
+        <Text style={{ color: BrandColors.textPrimary, fontWeight: '700' }}>
+          {speechTrend.enabled ? '탭해서 말하기 추이 보기' : '2회 이상 기록 시 추이 확인 가능'}
+        </Text>
+      </Pressable>
 
       {loading ? (
         <Text style={{ color: BrandColors.textSecondary }}>사진 설명 지표를 불러오는 중이에요…</Text>
@@ -392,6 +566,7 @@ function PhotoMetricsSection({
           ) : (
             <Text style={{ color: BrandColors.textSecondary }}>기록을 선택하여 자세한 지표를 확인해 주세요.</Text>
           )}
+          <SpeechTrendModal visible={showTrend} onClose={() => setShowTrend(false)} points={speechTrend.points} />
         </View>
       )}
     </View>
@@ -407,7 +582,7 @@ function PhotoMetricsCard({
   compact?: boolean;
   baselineRequiredCount: number;
 }) {
-  const [section, setSection] = useState<'current' | 'trend' | 'transcript'>('current');
+  const [section, setSection] = useState<'current' | 'transcript'>('current');
 
   useEffect(() => {
     setSection('current');
@@ -446,25 +621,11 @@ function PhotoMetricsCard({
         </View>
       );
     }
-    if (section === 'trend') {
-      if (!entry.trendEnabled) {
-        return (
-          <Text style={{ color: BrandColors.textSecondary }}>
-            아직 {baselineRequiredCount}회 이상 기록되지 않아 변화량을 보여줄 수 없어요.
-          </Text>
-        );
-      }
-      return entry.trendSummary ? (
-        <TrendSummaryView summary={entry.trendSummary} title="변화량 평가" />
-      ) : (
-        <Text style={{ color: BrandColors.textSecondary }}>변화량 정보가 아직 없습니다.</Text>
-      );
-    }
-    return (
-      <View
-        style={{
-          borderRadius: 16,
-          borderWidth: 1,
+      return (
+        <View
+          style={{
+            borderRadius: 16,
+            borderWidth: 1,
           borderColor: BrandColors.border,
           backgroundColor: BrandColors.surface,
           padding: 16,
@@ -487,21 +648,141 @@ function PhotoMetricsCard({
           minute: '2-digit',
         })}
       </Text>
-      <View
-        style={{
-          flexDirection: 'row',
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: BrandColors.border,
-          padding: 4,
-          backgroundColor: BrandColors.surface,
-        }}>
-        <TabButton label="음성 평가" active={section === 'current'} onPress={() => setSection('current')} />
-        <TabButton label="변화량" active={section === 'trend'} onPress={() => setSection('trend')} />
-        <TabButton label="말한 대본" active={section === 'transcript'} onPress={() => setSection('transcript')} />
-      </View>
+        <View
+          style={{
+            flexDirection: 'row',
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            padding: 4,
+            backgroundColor: BrandColors.surface,
+          }}>
+          <TabButton label="음성 평가" active={section === 'current'} onPress={() => setSection('current')} />
+          <TabButton label="말한 대본" active={section === 'transcript'} onPress={() => setSection('transcript')} />
+        </View>
       {renderSection()}
     </View>
+  );
+}
+
+function SpeechTrendModal({
+  visible,
+  onClose,
+  points,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  points: Array<{ label: string; wpm: number; pauseSec: number }>;
+}) {
+  const insets = useSafeAreaInsets();
+  const renderDotLabel = (color: string, suffix: string) =>
+    ({ x, y, indexData }: { x: number; y: number; indexData: number }) => (
+      <Text
+        key={`${x}-${y}`}
+        style={{
+          position: 'absolute',
+          left: x - 8,
+          top: y - 10,
+          fontSize: 10,
+          fontWeight: '700',
+          color,
+        }}>
+        {`${indexData}${suffix}`}
+      </Text>
+    );
+
+  const hasData = points.length >= 2;
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' }}>
+        <Pressable style={{ flex: 1 }} onPress={onClose} />
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            padding: 20,
+            gap: 14,
+            maxHeight: '80%',
+            paddingBottom: 12 + insets.bottom,
+          }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>말하기 추이</Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Text style={{ color: BrandColors.textSecondary }}>닫기</Text>
+            </Pressable>
+          </View>
+          {!hasData ? (
+            <Text style={{ color: BrandColors.textSecondary }}>그래프를 볼 수 있을 만큼 데이터가 부족합니다.</Text>
+          ) : (
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 18 }}>
+                <View>
+                  <Text style={{ fontWeight: '700', color: BrandColors.textPrimary, marginBottom: 6 }}>말 속도</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <LineChart
+                      data={{
+                        labels: points.map((p) => p.label),
+                        datasets: [{ data: points.map((p) => p.wpm), color: () => BrandColors.primary, strokeWidth: 3 }],
+                        legend: ['WPM'],
+                      }}
+                      width={Math.max(320, points.length * 80)}
+                      height={200}
+                      yAxisSuffix=" wpm"
+                      fromZero
+                      yAxisInterval={1}
+                      chartConfig={{
+                        backgroundColor: '#fff',
+                        backgroundGradientFrom: '#fff',
+                        backgroundGradientTo: '#fff',
+                        decimalPlaces: 0,
+                        color: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                        labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                        propsForDots: { r: '4', fill: BrandColors.primary },
+                        propsForBackgroundLines: { stroke: BrandColors.border, strokeWidth: 0.5 },
+                      }}
+                      style={{ marginVertical: 4, borderRadius: 12 }}
+                      renderDotContent={renderDotLabel(BrandColors.primary, '')}
+                    />
+                  </ScrollView>
+                </View>
+                <View>
+                  <Text style={{ fontWeight: '700', color: BrandColors.textPrimary, marginBottom: 6 }}>말 사이 쉼</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <LineChart
+                      data={{
+                        labels: points.map((p) => p.label),
+                        datasets: [
+                          { data: points.map((p) => Number(p.pauseSec.toFixed(1))), color: () => BrandColors.accent, strokeWidth: 3 },
+                        ],
+                        legend: ['초'],
+                      }}
+                      width={Math.max(320, points.length * 80)}
+                      height={200}
+                      yAxisSuffix="초"
+                      fromZero
+                      yAxisInterval={1}
+                      chartConfig={{
+                        backgroundColor: '#fff',
+                        backgroundGradientFrom: '#fff',
+                        backgroundGradientTo: '#fff',
+                        decimalPlaces: 1,
+                        color: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                        labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                        propsForDots: { r: '4', fill: BrandColors.accent },
+                        propsForBackgroundLines: { stroke: BrandColors.border, strokeWidth: 0.5 },
+                      }}
+                      style={{ marginVertical: 4, borderRadius: 12 }}
+                      renderDotContent={renderDotLabel(BrandColors.accent, '초')}
+                    />
+                  </ScrollView>
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -597,6 +878,213 @@ function TrendCard({
       </View>
     </View>
   );
+}
+
+function GameGraphModal({
+  visible,
+  onClose,
+  kind,
+  data,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  kind: GameKind | null;
+  data: Array<{ label: string; metric: number; avgDurationMs: number }>;
+}) {
+  const title = kind === 'sequence' ? '순서 기억하기' : kind === 'matching' ? '같은 그림 찾기' : '';
+  const insets = useSafeAreaInsets();
+  const renderDotLabel = (color: string, suffix: string) =>
+    ({ x, y, indexData }: { x: number; y: number; indexData: number }) => (
+      <Text
+        key={`${x}-${y}`}
+        style={{
+          position: 'absolute',
+          left: x - 8,
+          top: y,
+          fontSize: 14,
+          fontWeight: '700',
+          color,
+        }}>
+        {`${indexData}${suffix}`}
+      </Text>
+    );
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.35)',
+          justifyContent: 'flex-end',
+        }}>
+        <Pressable style={{ flex: 1 }} onPress={onClose} />
+        <View
+          style={{
+            backgroundColor: '#fff',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            padding: 20,
+            gap: 12,
+            maxHeight: '78%',
+            paddingBottom: 12 + insets.bottom,
+            overflow: 'hidden',
+          }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>
+              {title || '게임 통계'}
+            </Text>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <Text style={{ color: BrandColors.textSecondary }}>닫기</Text>
+            </Pressable>
+          </View>
+          {data.length === 0 ? (
+            <Text style={{ color: BrandColors.textSecondary }}>데이터가 없습니다.</Text>
+          ) : (
+            <View style={{ gap: 14, position: 'relative' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontWeight: '700', color: BrandColors.textPrimary }}>
+                  {kind === 'matching' ? '시도 횟수 / 소요시간' : '연속 성공 / 소요시간'}
+                </Text>
+                <Text style={{ color: BrandColors.textSecondary, fontSize: 12 }}>최근이 오른쪽에 표시됩니다.</Text>
+              </View>
+
+              <View style={{ position: 'relative' }}>
+                {kind === 'matching' ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={{ gap: 10 }}>
+                      <View style={{ position: 'relative' }}>
+                        <LineChart
+                          data={{
+                            labels: data.map((d) => d.label),
+                            datasets: [{ data: data.map((d) => d.metric), color: () => BrandColors.primary, strokeWidth: 3 }],
+                            legend: ['시도 횟수'],
+                          }}
+                          width={Math.max(300, data.length * 80)}
+                          height={180}
+                          yAxisSuffix="회"
+                          fromZero
+                          yAxisInterval={1}
+                          chartConfig={{
+                            backgroundColor: '#fff',
+                            backgroundGradientFrom: '#fff',
+                            backgroundGradientTo: '#fff',
+                            decimalPlaces: 0,
+                            color: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                            labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                            propsForDots: { r: '4', fill: BrandColors.primary },
+                            propsForBackgroundLines: { stroke: BrandColors.border, strokeWidth: 0.5 },
+                          }}
+                          style={{ marginVertical: 4, borderRadius: 12 }}
+                          renderDotContent={renderDotLabel(BrandColors.primary, '회')}
+                        />
+                      </View>
+                      <View style={{ position: 'relative' }}>
+                        <LineChart
+                          data={{
+                            labels: data.map((d) => d.label),
+                            datasets: [
+                              { data: data.map((d) => Number((d.avgDurationMs / 1000).toFixed(0))), color: () => BrandColors.accent, strokeWidth: 3 },
+                            ],
+                            legend: ['소요시간(초)'],
+                          }}
+                          width={Math.max(300, data.length * 80)}
+                          height={180}
+                          yAxisSuffix="초"
+                          fromZero
+                          yAxisInterval={1}
+                          chartConfig={{
+                            backgroundColor: '#fff',
+                            backgroundGradientFrom: '#fff',
+                            backgroundGradientTo: '#fff',
+                            decimalPlaces: 0,
+                            color: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                            labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                            propsForDots: { r: '4', fill: BrandColors.accent },
+                            propsForBackgroundLines: { stroke: BrandColors.border, strokeWidth: 0.5 },
+                          }}
+                          style={{ marginVertical: 4, borderRadius: 12 }}
+                          renderDotContent={renderDotLabel(BrandColors.accent, '초')}
+                        />
+                      </View>
+                    </View>
+                  </ScrollView>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={{ gap: 10 }}>
+                      <View style={{ position: 'relative' }}>
+                        <LineChart
+                          data={{
+                            labels: data.map((d) => d.label),
+                            datasets: [{ data: data.map((d) => d.metric), color: () => BrandColors.primary, strokeWidth: 3 }],
+                            legend: ['연속 성공(회)'],
+                          }}
+                          width={Math.max(300, data.length * 80)}
+                          height={180}
+                          yAxisSuffix="회"
+                          fromZero
+                          yAxisInterval={1}
+                          chartConfig={{
+                            backgroundColor: '#fff',
+                            backgroundGradientFrom: '#fff',
+                            backgroundGradientTo: '#fff',
+                            decimalPlaces: 0,
+                            color: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                            labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                            propsForDots: { r: '4', fill: BrandColors.primary },
+                            propsForBackgroundLines: { stroke: BrandColors.border, strokeWidth: 0.5 },
+                          }}
+                          style={{ marginVertical: 4, borderRadius: 12 }}
+                          renderDotContent={renderDotLabel(BrandColors.primary, '회')}
+                        />
+                      </View>
+                      <View style={{ position: 'relative' }}>
+                        <LineChart
+                          data={{
+                            labels: data.map((d) => d.label),
+                            datasets: [
+                              { data: data.map((d) => Number((d.avgDurationMs / 1000).toFixed(0))), color: () => BrandColors.accent, strokeWidth: 3 },
+                            ],
+                            legend: ['소요시간(초)'],
+                          }}
+                          width={Math.max(300, data.length * 80)}
+                          height={180}
+                          yAxisSuffix="초"
+                          fromZero
+                          yAxisInterval={1}
+                          chartConfig={{
+                            backgroundColor: '#fff',
+                            backgroundGradientFrom: '#fff',
+                            backgroundGradientTo: '#fff',
+                            decimalPlaces: 0,
+                            color: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                            labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+                            propsForDots: { r: '4', fill: BrandColors.accent },
+                            propsForBackgroundLines: { stroke: BrandColors.border, strokeWidth: 0.5 },
+                          }}
+                          style={{ marginVertical: 4, borderRadius: 12 }}
+                          renderDotContent={renderDotLabel(BrandColors.accent, '초')}
+                        />
+                      </View>
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
+
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function formatDuration(ms: number) {
+  if (!ms || Number.isNaN(ms)) return '0초';
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const remain = seconds % 60;
+  if (minutes === 0) return `${remain}초`;
+  return `${minutes}분 ${remain}초`;
 }
 
 const METRIC_LEVEL_COLORS: Record<MetricLevel, { border: string; background: string; text: string }> = {

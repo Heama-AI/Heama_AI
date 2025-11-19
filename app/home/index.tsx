@@ -24,27 +24,6 @@ const SERVICE_TILES: ServiceTile[] = [
     route: '/chat',
   },
   {
-    title: '기억력 퀴즈',
-    subtitle: '맞춤 문제 연습',
-    icon: 'game-controller',
-    color: '#FFE9A6',
-    route: '/games',
-  },
-  {
-    title: '같은 그림 찾기',
-    subtitle: '두 그림의 차이를 찾아요',
-    icon: 'color-palette',
-    color: '#FFE3F1',
-    route: '/games/spot-difference',
-  },
-  {
-    title: '순서 기억하기',
-    subtitle: '화투 4장 따라 눌러요',
-    icon: 'timer',
-    color: '#FFE4D3',
-    route: '/games/sequence-memory',
-  },
-  {
     title: '대화 기록',
     subtitle: '요약과 메모 관리',
     icon: 'documents',
@@ -52,11 +31,18 @@ const SERVICE_TILES: ServiceTile[] = [
     route: '/records',
   },
   {
-    title: '사진 설명',
-    subtitle: '이미지 보고 기록',
-    icon: 'image-outline',
+    title: '게임센터',
+    subtitle: '뇌훈련 게임 모음',
+    icon: 'game-controller',
+    color: '#FFE3F1',
+    route: '/games',
+  },
+  {
+    title: 'AI 예측 센터',
+    subtitle: '사진·지시문 검사',
+    icon: 'analytics',
     color: '#FFE3D6',
-    route: '/photo-note',
+    route: '/predict',
   },
   {
     title: '건강 통계',
@@ -70,22 +56,7 @@ const SERVICE_TILES: ServiceTile[] = [
     subtitle: '초대 코드로 연동하기',
     icon: 'people',
     color: '#FFE9C2',
-    route: '/mypage',
-  },
-];
-
-const SUPPORT_CARDS = [
-  {
-    title: 'AI 치매 예측',
-    description: '대화 데이터를 기반으로 위험도를 추정해요.',
-    route: '/stats',
-    accent: '#FFF7D6',
-  },
-  {
-    title: '요양 등급 메모',
-    description: '보호자와 공유할 핵심 메모를 정리하세요.',
-    route: '/records',
-    accent: '#FFEEC6',
+    route: '/mypage/guardian-link',
   },
 ];
 
@@ -127,26 +98,7 @@ export default function AuthenticatedHome() {
           gap: 24,
           paddingBottom: 24 + insets.bottom,
         }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <View>
-            {/* <Text style={{ fontSize: 13, color: BrandColors.textSecondary }}>Haema AI</Text> */}
-            <Text style={{ fontSize: 24, fontWeight: '800', color: BrandColors.textPrimary }}>해마 AI</Text>
-          </View>
-          <Pressable
-            onPress={() => router.push('/menu')}
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: BrandColors.border,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: BrandColors.surface,
-            }}>
-            <Ionicons name="menu" size={22} color={BrandColors.textPrimary} />
-          </Pressable>
-        </View>
+        <View style={{ height: 8 }} />
 
         <View
           style={{
@@ -161,10 +113,10 @@ export default function AuthenticatedHome() {
           <View style={{ flex: 1, gap: 10 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: '#DCA600' }}>해마와 대화해요!</Text>
             <Text style={{ fontSize: isCompact ? 24 : 28, fontWeight: '900', color: BrandColors.textPrimary }}>
-              {heroGreeting} 대화를 시작해볼까요?
+              {heroGreeting} 대화를 시작해요!
             </Text>
             <Text style={{ color: '#7A5C00', lineHeight: 20 }}>
-              음성으로 이야기를 들려주면 돌봄 메모를 만들어드려요.
+              해마랑 일상을 나눠봐요! 오늘은 무슨일이있었나요?
             </Text>
             <Pressable
               onPress={() => router.push('/chat')}
@@ -213,27 +165,6 @@ export default function AuthenticatedHome() {
           </View>
         </View>
 
-        <View style={{ gap: 14, paddingHorizontal: 4 }}>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: BrandColors.textPrimary }}>추천 기능</Text>
-          {SUPPORT_CARDS.map((card) => (
-            <Pressable
-              key={card.title}
-              onPress={() => router.push(card.route)}
-              style={{
-                backgroundColor: card.accent,
-                borderRadius: 24,
-                padding: 20,
-                gap: 8,
-                borderWidth: 1,
-                borderColor: BrandColors.border,
-                marginHorizontal: 4,
-                ...Shadows.card,
-              }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>{card.title}</Text>
-              <Text style={{ color: BrandColors.textSecondary }}>{card.description}</Text>
-            </Pressable>
-          ))}
-        </View>
       </ScrollView>
     </SafeAreaView>
   );

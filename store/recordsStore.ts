@@ -6,7 +6,7 @@ import {
   saveRecord as saveRecordToStorage,
   updateRecordTitle as updateRecordTitleInStorage,
 } from '@/lib/storage/recordsStorage';
-import { generateLocalKeywords } from '@/lib/summary/localKeywordExtractor';
+import { generateKeywords } from '@/lib/summary';
 import { ChatMessage } from '@/types/chat';
 import { ConversationRecord } from '@/types/records';
 import { create } from 'zustand';
@@ -14,8 +14,8 @@ import { create } from 'zustand';
 async function createRecord(messages: ChatMessage[], title?: string, recordIdOverride?: string): Promise<ConversationRecord> {
   const now = Date.now();
   const heuristicKeywords = extractKeywords(messages);
-  const localKeywords = await generateLocalKeywords(messages);
-  const keywords = localKeywords && localKeywords.length > 0 ? localKeywords : heuristicKeywords;
+  const generatedKeywords = await generateKeywords(messages);
+  const keywords = generatedKeywords && generatedKeywords.length > 0 ? generatedKeywords : heuristicKeywords;
   const stats = deriveStats(messages);
   const highlights = deriveHighlights(messages);
   const summary = await summariseConversation(messages, keywords);

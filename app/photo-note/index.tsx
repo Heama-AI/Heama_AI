@@ -78,7 +78,7 @@ export default function PhotoNoteScreen() {
     async (uri: string) => {
       setIsTranscribing(true);
       try {
-        const transcript = await transcribeAudioDetailed(uri, { language: 'en' });
+        const transcript = await transcribeAudioDetailed(uri, { language: 'ko' });
         const metrics = calculateSpeechMetrics(transcript);
         await addNote({
           imageId: IMAGE_ID,

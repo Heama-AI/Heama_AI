@@ -8,8 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint",
-    "sync-models": "node ./scripts/sync-models.js"
+    "lint": "expo lint"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -36,10 +35,11 @@
     "expo-symbols": "~1.0.7",
     "expo-system-ui": "~6.0.7",
     "expo-web-browser": "~15.0.8",
-    "llama.rn": "^0.8.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",
+    "react-native-chart-kit": "^6.12.0",
+    "react-native-executorch": "^0.5.15",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-mmkv": "^3.3.3",
     "react-native-reanimated": "~4.1.1",

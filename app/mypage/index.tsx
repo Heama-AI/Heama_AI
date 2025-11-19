@@ -207,12 +207,7 @@ export default function MyPage() {
         <ActionRow
           label="보호자 연동"
           description="보호자와 기록을 공유할 수 있도록 연동 코드를 발급합니다."
-          onPress={() =>
-            Alert.alert(
-              '보호자 연동',
-              '보호자 초대 코드는 임시 기능입니다.\n\n예시 코드: CARE-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
-            )
-          }
+          onPress={() => router.push('/mypage/guardian-link')}
         />
         <ActionRow
           label="로그아웃"

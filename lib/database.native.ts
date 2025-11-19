@@ -8,6 +8,12 @@ async function applyMigrations(db: SQLite.SQLiteDatabase) {
   await db.execAsync('PRAGMA foreign_keys = ON;');
   await db.execAsync('PRAGMA journal_mode = WAL;');
   await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS app_state (
+      key TEXT PRIMARY KEY NOT NULL,
+      value TEXT NOT NULL
+    );
+  `);
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS chat_messages (
       id TEXT PRIMARY KEY NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),

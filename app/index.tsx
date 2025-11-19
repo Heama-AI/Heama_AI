@@ -1,6 +1,10 @@
 import { HaemayaMascot } from '@/components/HaemayaMascot';
 import { BrandColors, Shadows } from '@/constants/theme';
+import { IS_EXECUTORCH_ASSISTANT } from '@/lib/assistantConfig';
+import { useAssistantEngine } from '@/lib/assistantEngine';
+import { IS_EXECUTORCH_SUMMARY } from '@/lib/summary/config';
 import { useAuthStore } from '@/store/authStore';
+import { useSummaryWorkerStore } from '@/store/summaryWorkerStore';
 import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -8,13 +12,22 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 export default function Home() {
   const userId = useAuthStore((state) => state.userId);
+  const { isReady } = useAssistantEngine();
+  const isSummaryReady = useSummaryWorkerStore((state) => state.isModelReady);
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    if (userId) {
+    if (!userId) return;
+
+    const assistantNotReady = IS_EXECUTORCH_ASSISTANT && !isReady;
+    const summaryNotReady = IS_EXECUTORCH_SUMMARY && !isSummaryReady;
+
+    if (assistantNotReady || summaryNotReady) {
+      router.replace('/model-setup');
+    } else {
       router.replace('/home');
     }
-  }, [userId]);
+  }, [userId, isReady, isSummaryReady]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>

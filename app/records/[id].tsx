@@ -272,7 +272,7 @@ export default function RecordDetail() {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => router.push({ pathname: '/games', params: { recordId: record.id } })}
+            onPress={() => router.push({ pathname: '/games/memory-quiz', params: { recordId: record.id } })}
             style={[
               stackActions ? { width: '100%' } : { flex: 1 },
               {

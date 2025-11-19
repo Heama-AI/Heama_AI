@@ -1,5 +1,5 @@
 import { createId } from '@/lib/conversation';
-import { clearChatMessages, loadChatMessages, saveChatMessage } from '@/lib/storage/chatStorage';
+import { clearChatMessages, loadChatMessages, loadConversationId, saveChatMessage, saveConversationId } from '@/lib/storage/chatStorage';
 import { ChatMessage } from '@/types/chat';
 import { create } from 'zustand';
 
@@ -37,7 +37,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     return assistantMessage;
   },
   setResponding: (isResponding) => set({ isResponding }),
-  setConversationId: (conversationId) => set({ conversationId }),
+  setConversationId: (conversationId) => {
+    set({ conversationId });
+    void saveConversationId(conversationId);
+  },
   reset: (options) => {
     const nextConversationId = options?.conversationId ?? createId();
     set((state) => ({
@@ -47,11 +50,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversationId: nextConversationId,
     }));
     void clearChatMessages();
+    void saveConversationId(nextConversationId);
   },
   hydrate: async () => {
     if (get().hasHydrated) return;
     try {
-      const persistedMessages = await loadChatMessages();
+      const [persistedMessages, persistedConversationId] = await Promise.all([
+        loadChatMessages(),
+        loadConversationId(),
+      ]);
       set((state) => {
         if (state.hasHydrated) {
           return state;
@@ -65,12 +72,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
         const ordered = Array.from(merged.values()).sort((a, b) => a.ts - b.ts);
         const conversationId =
-          ordered.length > 0 ? state.conversationId ?? ordered[0].id : state.conversationId ?? createId();
+          persistedConversationId ??
+          (ordered.length > 0 ? state.conversationId ?? ordered[0].id : state.conversationId ?? createId());
+        void saveConversationId(conversationId);
         return { messages: ordered, hasHydrated: true, conversationId };
       });
     } catch (error) {
       console.error('Failed to hydrate chat messages', error);
-      set((state) => ({ hasHydrated: true, conversationId: state.conversationId ?? createId() }));
+      const fallbackId = createId();
+      void saveConversationId(fallbackId);
+      set((state) => ({ hasHydrated: true, conversationId: state.conversationId ?? fallbackId }));
     }
   },
 }));

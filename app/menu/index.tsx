@@ -24,8 +24,8 @@ const PRIMARY_ACTIONS: MenuCardConfig[] = [
     accent: BrandColors.surfaceSoft,
   },
   {
-    title: '맞춤형 퀴즈 플레이',
-    description: '최근 대화를 기반으로 기억력을 점검해요.',
+    title: '게임센터',
+    description: '기억력 퀴즈와 두뇌훈련 게임을 선택해요.',
     route: '/games',
     accent: BrandColors.secondarySoft,
   },

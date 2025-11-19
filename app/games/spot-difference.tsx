@@ -1,6 +1,8 @@
 import { BrandColors, Shadows } from '@/constants/theme';
-import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useGameStatsStore } from '@/store/gameStatsStore';
+import { Image } from 'expo-image';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CARD_IMAGES = [
@@ -25,7 +27,7 @@ type Card = {
   matched: boolean;
 };
 
-function shuffle<T>(array: T[]): T[] {
+function shuffle<T>(array: readonly T[]): T[] {
   const arr = array.slice();
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -52,6 +54,9 @@ export default function MemoryGameRoute() {
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [gridLayout, setGridLayout] = useState({ width: 0, height: 0 });
+  const addGameResult = useGameStatsStore((state) => state.addResult);
+  const startTimeRef = useRef<number | null>(null);
+  const [hasRecorded, setHasRecorded] = useState(false);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -65,6 +70,28 @@ export default function MemoryGameRoute() {
     }
   }, [deck]);
 
+  useEffect(() => {
+    if (deck.length === 0) return;
+    if (!deck.every((c) => c.matched)) return;
+    if (hasRecorded) return;
+    const end = Date.now();
+    const durationMs =
+      startTimeRef.current !== null ? end - startTimeRef.current : time * 1000;
+    const pairCount = deck.length / 2;
+
+    void addGameResult({
+      kind: 'matching',
+      durationMs,
+      success: true,
+      totalTasks: pairCount,
+      correctTasks: pairCount,
+      attempts: moves,
+      meta: { pairCount },
+      playedAt: end,
+    });
+    setHasRecorded(true);
+  }, [addGameResult, deck, hasRecorded, moves, time]);
+
   const isFinished = useMemo(() => deck.length > 0 && deck.every((c) => c.matched), [deck]);
   const minutes = Math.floor(time / 60);
   const seconds = String(time % 60).padStart(2, '0');
@@ -75,6 +102,9 @@ export default function MemoryGameRoute() {
     if (deck[index].matched) return;
 
     if (!isRunning) setIsRunning(true);
+    if (startTimeRef.current === null) {
+      startTimeRef.current = Date.now();
+    }
 
     if (flipped.length === 0) {
       setFlipped([index]);
@@ -115,6 +145,8 @@ export default function MemoryGameRoute() {
     setMoves(0);
     setTime(0);
     setIsRunning(false);
+    setHasRecorded(false);
+    startTimeRef.current = null;
   };
 
   return (
@@ -158,7 +190,8 @@ export default function MemoryGameRoute() {
                 <Image
                   source={isOpen ? card.image : BACK_IMAGE}
                   style={styles.cardImage}
-                  resizeMode="contain"
+                  contentFit="contain"
+                  cachePolicy="memory-disk"
                 />
               </Pressable>
             );

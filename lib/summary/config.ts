@@ -1,0 +1,4 @@
+const RAW_SUMMARY_PROVIDER = (process.env.EXPO_PUBLIC_SUMMARY_PROVIDER ?? 'local').toLowerCase();
+
+export const SUMMARY_PROVIDER = RAW_SUMMARY_PROVIDER;
+export const IS_EXECUTORCH_SUMMARY = RAW_SUMMARY_PROVIDER === 'executorch';

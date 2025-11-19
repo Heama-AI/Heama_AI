@@ -1,5 +1,6 @@
 const CHAT_STORAGE_KEY = 'heama_chat_messages';
 const RECORDS_STORAGE_KEY = 'heama_records';
+const CONVERSATION_ID_KEY = 'heama_conversation_id';
 
 type ChatRow = {
   id: string;
@@ -26,17 +27,20 @@ type WebDatabase = {
   execAsync: (source: string) => Promise<void>;
   runAsync: (source: string, params?: Record<string, unknown>) => Promise<void>;
   getAllAsync: <T>(source: string) => Promise<T[]>;
+  getFirstAsync: <T>(source: string, params?: Record<string, unknown>) => Promise<T | undefined>;
   withExclusiveTransactionAsync: (task: (txn: WebDatabase) => Promise<void>) => Promise<void>;
 };
 
 type StoreShape = {
   chatMessages: ChatRow[];
   records: RecordRow[];
+  conversationId?: string | null;
 };
 
 const memoryStore: StoreShape = {
   chatMessages: [],
   records: [],
+  conversationId: null,
 };
 
 const hasLocalStorage = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -69,6 +73,7 @@ function ensureHydrated() {
     ...record,
     fhir_bundle_json: record.fhir_bundle_json ?? '{}',
   }));
+  memoryStore.conversationId = loadFromStorage<string | null>(CONVERSATION_ID_KEY, null);
   hydrated = true;
 }
 
@@ -127,6 +132,10 @@ const webDatabase: WebDatabase = {
       memoryStore.chatMessages = [];
       persistToStorage(CHAT_STORAGE_KEY, memoryStore.chatMessages);
     }
+    if (normalized.startsWith('DELETE FROM APP_STATE')) {
+      memoryStore.conversationId = null;
+      persistToStorage(CONVERSATION_ID_KEY, memoryStore.conversationId);
+    }
   },
   async runAsync(source: string, params: Record<string, unknown> = {}) {
     ensureHydrated();
@@ -159,6 +168,19 @@ const webDatabase: WebDatabase = {
     if (normalized.startsWith('DELETE FROM CHAT_MESSAGES')) {
       memoryStore.chatMessages = [];
       persistToStorage(CHAT_STORAGE_KEY, memoryStore.chatMessages);
+      return;
+    }
+    if (normalized.startsWith('INSERT OR REPLACE INTO APP_STATE') || normalized.startsWith('INSERT INTO APP_STATE')) {
+      const key = String(params.$key ?? '');
+      const value = String(params.$value ?? '');
+      if (key === 'conversation_id') {
+        memoryStore.conversationId = value;
+        persistToStorage(CONVERSATION_ID_KEY, memoryStore.conversationId);
+      }
+      return;
+    }
+    if (normalized.startsWith('SELECT VALUE FROM APP_STATE')) {
+      return;
     }
   },
   async getAllAsync<T>(source: string): Promise<T[]> {
@@ -170,7 +192,27 @@ const webDatabase: WebDatabase = {
     if (normalized.startsWith('SELECT * FROM RECORDS')) {
       return memoryStore.records.slice() as unknown as T[];
     }
+    if (normalized.startsWith('SELECT VALUE FROM APP_STATE')) {
+      if (normalized.includes('CONVERSATION_ID')) {
+        const value = memoryStore.conversationId ?? null;
+        return [{ value }] as unknown as T[];
+      }
+      return [] as unknown as T[];
+    }
     return [];
+  },
+  async getFirstAsync<T>(source: string, params: Record<string, unknown> = {}): Promise<T | undefined> {
+    const normalized = normalize(source);
+    if (normalized.startsWith('SELECT VALUE FROM APP_STATE')) {
+      ensureHydrated();
+      const key = String(params.$key ?? '');
+      if (key === 'conversation_id') {
+        const value = memoryStore.conversationId ?? null;
+        return (value !== null ? [{ value }] : [])?.[0] as unknown as T | undefined;
+      }
+    }
+    const all = await this.getAllAsync<T>(source);
+    return all[0];
   },
   async withExclusiveTransactionAsync(task: (txn: WebDatabase) => Promise<void>) {
     await task(this);

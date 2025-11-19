@@ -1,163 +1,35 @@
-import CardButton from '@/components/CardButton';
 import { BrandColors, Shadows } from '@/constants/theme';
-import { useRecordsStore } from '@/store/recordsStore';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleProp, Text, View, ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-interface GameState {
-  questionIndex: number;
-  selectedChoice?: string;
-  score: number;
-  showExplanation: boolean;
-  completed: boolean;
-}
+const GAME_CARDS = [
+  {
+    title: '기억력 퀴즈',
+    description: '최근 대화를 기반으로 맞춤 문제 풀기',
+    icon: 'flash',
+    route: '/games/memory-quiz',
+    tint: '#FFF0D1',
+  },
+  {
+    title: '같은 그림 맞추기',
+    description: '두 그림의 차이를 찾아요',
+    icon: 'color-palette',
+    route: '/games/spot-difference',
+    tint: '#FFE6F0',
+  },
+  {
+    title: '순서 맞추기',
+    description: '짜여진 순서를 기억하며 눌러요',
+    icon: 'timer',
+    route: '/games/sequence-memory',
+    tint: '#FFE6D9',
+  },
+];
 
-const initialGameState: GameState = {
-  questionIndex: 0,
-  score: 0,
-  showExplanation: false,
-  completed: false,
-};
-
-function ChoiceButton({
-  choice,
-  selected,
-  onPress,
-  disabled,
-  style,
-  textColor,
-}: {
-  choice: string;
-  selected: boolean;
-  onPress: () => void;
-  disabled: boolean;
-  style?: StyleProp<ViewStyle>;
-  textColor: string;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={[
-        {
-          borderWidth: 1,
-          borderColor: BrandColors.border,
-          backgroundColor: BrandColors.surface,
-          borderRadius: 14,
-          padding: 16,
-        },
-        selected && !style && { borderColor: BrandColors.primary, backgroundColor: BrandColors.primarySoft },
-        style,
-      ]}>
-      <Text style={{ color: textColor, fontSize: 16 }}>{choice}</Text>
-    </Pressable>
-  );
-}
-
-export default function Games() {
-  const { recordId } = useLocalSearchParams<{ recordId?: string }>();
-  const { records } = useRecordsStore();
-  const [state, setState] = useState<GameState>(initialGameState);
-
+export default function GameCenter() {
   const insets = useSafeAreaInsets();
-  const activeRecord = useMemo(() => {
-    if (records.length === 0) return undefined;
-    if (recordId) {
-      const target = records.find((record) => record.id === recordId);
-      if (target) return target;
-    }
-    return records[0];
-  }, [records, recordId]);
-
-  useEffect(() => {
-    // reset when record changes
-    setState(initialGameState);
-  }, [activeRecord?.id]);
-
-  if (!activeRecord) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>
-        <View
-          style={{
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24,
-            gap: 16,
-          }}>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>퀴즈를 만들 기록이 없어요</Text>
-          <Text style={{ color: BrandColors.textSecondary, textAlign: 'center' }}>
-            대화를 저장한 뒤 맞춤 퀴즈를 풀어보세요.
-          </Text>
-          <CardButton title="대화하러 가기" onPress={() => router.push('/chat')} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const questions = activeRecord.quiz;
-  const currentQuestion = questions[state.questionIndex];
-
-  const handleChoiceSelect = (choice: string) => {
-    if (state.showExplanation) return;
-    setState((prev) => ({ ...prev, selectedChoice: choice }));
-  };
-
-  const handleAction = () => {
-    if (!currentQuestion) return;
-
-    if (!state.showExplanation) {
-      if (!state.selectedChoice) {
-        Alert.alert('선택 필요', '정답이라고 생각되는 답안을 선택해주세요.');
-        return;
-      }
-      const isCorrect = state.selectedChoice === currentQuestion.answer;
-      setState((prev) => ({
-        ...prev,
-        score: isCorrect ? prev.score + 1 : prev.score,
-        showExplanation: true,
-      }));
-      return;
-    }
-
-    const nextIndex = state.questionIndex + 1;
-    if (nextIndex >= questions.length) {
-      setState((prev) => ({ ...prev, completed: true }));
-    } else {
-      setState({
-        questionIndex: nextIndex,
-        score: state.score,
-        selectedChoice: undefined,
-        showExplanation: false,
-        completed: false,
-      });
-    }
-  };
-
-  const restartGame = () => {
-    setState(initialGameState);
-  };
-
-  if (!currentQuestion) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <Text style={{ fontSize: 18, fontWeight: '600' }}>퀴즈를 불러오는 중 문제가 발생했습니다.</Text>
-          <CardButton title="기록으로 돌아가기" onPress={() => router.push('/records')} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const answerStyle = state.showExplanation
-    ? (choice: string): StyleProp<ViewStyle> => {
-        if (choice === currentQuestion.answer) return { borderColor: '#51cf66', backgroundColor: '#e6fcf5' };
-        if (choice === state.selectedChoice) return { borderColor: '#ff6b6b', backgroundColor: '#ffe3e3' };
-        return undefined;
-      }
-    : () => undefined;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>
@@ -166,165 +38,111 @@ export default function Games() {
         contentContainerStyle={{
           paddingHorizontal: 24,
           paddingTop: 24,
-          gap: 24,
-          paddingBottom: 48 + insets.bottom,
+          paddingBottom: 40 + insets.bottom,
+          gap: 20,
         }}>
-      <View>
-        <Text style={{ fontSize: 28, fontWeight: '800', color: BrandColors.textPrimary }}>기억력 퀴즈</Text>
-        <Text style={{ color: BrandColors.textSecondary }}>
-          {activeRecord.title} 기록을 기반으로 생성된 맞춤 문제입니다.
-        </Text>
-      </View>
-
-      <View style={{ flexDirection: 'row', gap: 16 }}>
         <View
           style={{
-            flex: 1,
-            backgroundColor: BrandColors.surface,
-            borderRadius: 20,
-            padding: 18,
-            gap: 6,
-            borderWidth: 1,
-            borderColor: BrandColors.border,
-            ...Shadows.card,
-          }}>
-          <Text style={{ color: BrandColors.textSecondary }}>현재 점수</Text>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: BrandColors.primary }}>
-            {state.score} / {questions.length}
-          </Text>
-        </View>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: BrandColors.surface,
-            borderRadius: 20,
-            padding: 18,
-            gap: 6,
-            borderWidth: 1,
-            borderColor: BrandColors.border,
-            ...Shadows.card,
-          }}>
-          <Text style={{ color: BrandColors.textSecondary }}>현재 문제</Text>
-          <Text style={{ fontSize: 24, fontWeight: '800', color: BrandColors.primaryDark }}>
-            {state.questionIndex + 1} / {questions.length}
-          </Text>
-        </View>
-      </View>
-
-      <View
-        style={{
-          backgroundColor: BrandColors.surface,
-          borderRadius: 26,
-          padding: 24,
-          gap: 16,
-          borderWidth: 1,
-          borderColor: BrandColors.border,
-          ...Shadows.card,
-        }}>
-        <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>
-          {currentQuestion.question}
-        </Text>
-        <View style={{ gap: 12 }}>
-          {currentQuestion.choices.map((choice) => {
-            const containerStyle = answerStyle(choice);
-            const isSelected = state.selectedChoice === choice;
-            const isCorrectChoice = state.showExplanation && choice === currentQuestion.answer;
-            const isWrongChoice =
-              state.showExplanation && choice === state.selectedChoice && choice !== currentQuestion.answer;
-            const textColor = isCorrectChoice
-              ? BrandColors.success
-              : isWrongChoice
-              ? BrandColors.danger
-              : isSelected
-              ? BrandColors.primary
-              : BrandColors.textPrimary;
-
-            return (
-              <ChoiceButton
-                key={choice}
-                choice={choice}
-                selected={isSelected}
-                onPress={() => handleChoiceSelect(choice)}
-                disabled={state.showExplanation}
-                style={containerStyle}
-                textColor={textColor}
-              />
-            );
-          })}
-        </View>
-        {state.showExplanation ? (
-          <View
-            style={{
-              backgroundColor: BrandColors.surfaceSoft,
-              borderRadius: 12,
-              padding: 12,
-              borderWidth: 1,
-              borderColor: BrandColors.border,
-            }}>
-            <Text style={{ color: BrandColors.primary, fontWeight: '600', marginBottom: 4 }}>
-              정답: {currentQuestion.answer}
-            </Text>
-            <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>{currentQuestion.explanation}</Text>
-          </View>
-        ) : null}
-        <Pressable
-          onPress={handleAction}
-          style={{
-            marginTop: 12,
-            backgroundColor: BrandColors.primary,
-            borderRadius: 16,
-            padding: 16,
-            alignItems: 'center',
-          }}>
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
-            {state.showExplanation ? '다음으로' : '정답 확인'}
-          </Text>
-        </Pressable>
-      </View>
-
-      {state.completed ? (
-        <View
-          style={{
-            backgroundColor: BrandColors.surface,
-            borderRadius: 24,
-            padding: 22,
+            backgroundColor: '#FFE3F1',
+            borderRadius: 28,
+            padding: 20,
             gap: 14,
             borderWidth: 1,
             borderColor: BrandColors.border,
             ...Shadows.card,
           }}>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>퀴즈 완료!</Text>
-          <Text style={{ color: BrandColors.textSecondary }}>
-            총 {questions.length}문제 중 {state.score}문제를 맞췄어요. 기록을 복습하고 다시 도전해보세요.
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
-            <Pressable
-              onPress={restartGame}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <View
               style={{
-                flex: 1,
-                backgroundColor: BrandColors.primary,
-                borderRadius: 16,
-                padding: 14,
+                width: 86,
+                height: 86,
+                borderRadius: 24,
+                backgroundColor: '#FF7B9E',
                 alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#c92a2a',
+                shadowOpacity: 0.16,
+                shadowOffset: { width: 0, height: 12 },
+                shadowRadius: 18,
               }}>
-              <Text style={{ color: '#fff', fontWeight: '700' }}>다시 도전</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => router.push(`/records/${activeRecord.id}`)}
-              style={{
-                flex: 1,
-                backgroundColor: BrandColors.surface,
-                borderRadius: 16,
-                padding: 14,
-                alignItems: 'center',
-                borderWidth: 1,
-                borderColor: BrandColors.border,
-              }}>
-              <Text style={{ color: BrandColors.primary, fontWeight: '700' }}>기록 복습</Text>
-            </Pressable>
+              <Ionicons name="game-controller" size={42} color="#fff" />
+            </View>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#b1342c' }}>해마 게임 센터</Text>
+              <Text style={{ fontSize: 24, fontWeight: '900', color: BrandColors.textPrimary }}>즐겁게 두뇌 운동해요</Text>
+              <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>
+                오늘은 어떤 게임으로 
+                {'\n'}깨울까요?
+              </Text>
+            </View>
+          </View>
+
+        </View>
+
+        <View style={{ gap: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: BrandColors.textPrimary }}>오늘의 추천</Text>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            {GAME_CARDS.slice(0, 2).map((game) => (
+              <Pressable
+                key={game.title}
+                onPress={() => router.push(game.route)}
+                style={{
+                  flex: 1,
+                  backgroundColor: game.tint,
+                  borderRadius: 18,
+                  padding: 16,
+                  gap: 8,
+                  borderWidth: 1,
+                  borderColor: BrandColors.border,
+                  ...Shadows.card,
+                  minHeight: 108,
+                }}>
+                <Ionicons name={game.icon as keyof typeof Ionicons.glyphMap} size={22} color={BrandColors.textPrimary} />
+                <Text style={{ fontSize: 16, fontWeight: '800', color: BrandColors.textPrimary }}>{game.title}</Text>
+                <Text style={{ color: BrandColors.textSecondary, lineHeight: 18 }}>{game.description}</Text>
+              </Pressable>
+            ))}
           </View>
         </View>
-      ) : null}
+
+        <View style={{ gap: 12 }}>
+          <Text style={{ fontSize: 17, fontWeight: '800', color: BrandColors.textPrimary }}>전체 게임</Text>
+          {GAME_CARDS.map((game) => (
+            <Pressable
+              key={`${game.title}-list`}
+              onPress={() => router.push(game.route)}
+              style={{
+                backgroundColor: '#fff',
+                borderRadius: 22,
+                padding: 18,
+                gap: 10,
+                borderWidth: 1,
+                borderColor: BrandColors.border,
+                flexDirection: 'row',
+                alignItems: 'center',
+                ...Shadows.card,
+              }}>
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 16,
+                  backgroundColor: 'rgba(255,255,255,0.88)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: BrandColors.border,
+                }}>
+                <Ionicons name={game.icon as keyof typeof Ionicons.glyphMap} size={24} color={BrandColors.textPrimary} />
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>{game.title}</Text>
+                <Text style={{ color: BrandColors.textSecondary, lineHeight: 19 }}>{game.description}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={BrandColors.textSecondary} />
+            </Pressable>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

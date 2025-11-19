@@ -44,7 +44,6 @@ const config: ExpoConfig = {
       },
     ],
     'expo-sqlite',
-    './plugins/withModelAssets',
   ],
   experiments: {
     typedRoutes: true,

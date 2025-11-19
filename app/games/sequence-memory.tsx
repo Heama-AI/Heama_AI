@@ -1,6 +1,8 @@
 import { BrandColors, Shadows } from '@/constants/theme';
-import { useEffect, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { useGameStatsStore } from '@/store/gameStatsStore';
+import { Image } from 'expo-image';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CARD_LIBRARY = [
@@ -28,6 +30,16 @@ const CARD_SCALE = 0.9;
 type Stage = 'ready' | 'showing' | 'input' | 'result';
 type ResultState = 'success' | 'fail' | null;
 type CardInfo = (typeof CARD_LIBRARY)[number];
+type PendingGameResult = {
+  kind: 'sequence';
+  durationMs: number;
+  success: boolean;
+  totalTasks: number;
+  correctTasks: number;
+  attempts: number;
+  meta: { round: number; streak: number };
+  playedAt: number;
+};
 
 function shuffle<T>(items: readonly T[]): T[] {
   const arr = [...items];
@@ -55,6 +67,14 @@ export default function SequenceMemoryGame() {
   const [round, setRound] = useState(1);
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
+  const addGameResult = useGameStatsStore((state) => state.addResult);
+  const hydrateGameStats = useGameStatsStore((state) => state.hydrate);
+  const startTimeRef = useRef<number | null>(null);
+  const pendingResultsRef = useRef<PendingGameResult[]>([]);
+
+  useEffect(() => {
+    void hydrateGameStats();
+  }, [hydrateGameStats]);
 
   useEffect(() => {
     if (stage !== 'showing') return;
@@ -99,6 +119,7 @@ export default function SequenceMemoryGame() {
     setResult(null);
     setHighlightedId(null);
     setStage('showing');
+    startTimeRef.current = Date.now();
   };
 
   const handleCardPress = (cardId: string) => {
@@ -116,19 +137,67 @@ export default function SequenceMemoryGame() {
       setResult('fail');
       setStage('result');
       setStreak(0);
+      const end = Date.now();
+      const durationMs = startTimeRef.current ? end - startTimeRef.current : 0;
+      pendingResultsRef.current = [
+        ...pendingResultsRef.current,
+        {
+          kind: 'sequence',
+          durationMs,
+          success: false,
+          totalTasks: sequence.length,
+          correctTasks: nextInput.length,
+          attempts: nextInput.length,
+          meta: { round, streak: 0 },
+          playedAt: end,
+        },
+      ];
+      startTimeRef.current = null;
       return;
     }
 
     if (nextIndex + 1 === sequence.length) {
+      const nextStreak = streak + 1;
       setResult('success');
       setStage('result');
       setStreak((prev) => {
-        const next = prev + 1;
-        setBestStreak((best) => Math.max(best, next));
-        return next;
+        const updated = prev + 1;
+        setBestStreak((best) => Math.max(best, updated));
+        return updated;
       });
+      const end = Date.now();
+      const durationMs = startTimeRef.current ? end - startTimeRef.current : 0;
+      pendingResultsRef.current = [
+        ...pendingResultsRef.current,
+        {
+          kind: 'sequence',
+          durationMs,
+          success: true,
+          totalTasks: sequence.length,
+          correctTasks: sequence.length,
+          attempts: sequence.length,
+          meta: { round, streak: nextStreak },
+          playedAt: end,
+        },
+      ];
+      startTimeRef.current = null;
       return;
     }
+  };
+  const flushPendingResults = () => {
+    pendingResultsRef.current.forEach((payload) => {
+      void addGameResult(payload);
+    });
+    pendingResultsRef.current = [];
+  };
+  const handleStop = () => {
+    flushPendingResults();
+    setPlayerInput([]);
+    setIncorrectIndex(null);
+    setResult(null);
+    setStage('ready');
+    setHighlightedId(null);
+    startTimeRef.current = null;
   };
 
   const handleReset = () => {
@@ -141,6 +210,7 @@ export default function SequenceMemoryGame() {
     setHighlightedId(null);
     setResult(null);
     setStage('ready');
+    startTimeRef.current = null;
   };
 
   const instructionText = (() => {
@@ -221,11 +291,11 @@ export default function SequenceMemoryGame() {
                   styles.card,
                   { width: cardDimensions.cardWidth, height: cardDimensions.cardHeight },
                   isHighlighted && styles.cardHighlight,
-                  badge && styles.cardSelected,
+                  !!badge && styles.cardSelected,
                   isWrong && styles.cardWrong,
                   disabled && stage !== 'showing' && { opacity: stage === 'ready' ? 0.7 : 1 },
                 ]}>
-                <Image source={imageSource} style={styles.cardImage} resizeMode="contain" />
+                <Image source={imageSource} style={styles.cardImage} contentFit="contain" cachePolicy="memory-disk" />
                 {showFront ? (
                   <View style={styles.cardLabel}>
                     <Text style={styles.cardLabelText}>{card.label}</Text>
@@ -247,12 +317,15 @@ export default function SequenceMemoryGame() {
           ) : stage === 'showing' ? null : stage === 'input' ? (
             <PrimaryButton label="기억이 안 나요 (다시 보기)" onPress={() => startPreview({ reuseSequence: true })} />
           ) : (
-            <>
+            <View style={{ gap: 10 }}>
+              <PrimaryButton label="이어서 하기" onPress={() => startPreview()} />
+              <PrimaryButton label="그만하기" onPress={handleStop} />
               {result === 'fail' ? (
-                <PrimaryButton label="같은 순서 다시 보기" onPress={() => startPreview({ reuseSequence: true })} />
+                <Pressable onPress={() => startPreview({ reuseSequence: true })} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryText}>같은 순서 다시 보기</Text>
+                </Pressable>
               ) : null}
-              <PrimaryButton label="새로운 카드로 도전" onPress={() => startPreview()} />
-            </>
+            </View>
           )}
           <Pressable onPress={handleReset} style={styles.secondaryButton}>
             <Text style={styles.secondaryText}>기록 초기화</Text>
@@ -381,6 +454,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
+    ...Shadows.card,
   },
   primaryText: {
     color: '#fff',

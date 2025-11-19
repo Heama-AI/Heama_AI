@@ -1,6 +1,11 @@
 import { getDatabase } from '@/lib/database';
 import type { ChatMessage } from '@/types/chat';
 
+type AppStateRow = {
+  key: string;
+  value: string;
+};
+
 type ChatRow = {
   id: string;
   role: string;
@@ -53,4 +58,22 @@ export async function overwriteChatMessages(messages: ChatMessage[]) {
 export async function clearChatMessages() {
   const db = await getDatabase();
   await db.execAsync('DELETE FROM chat_messages');
+}
+
+const CONVERSATION_KEY = 'conversation_id';
+
+export async function loadConversationId(): Promise<string | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<AppStateRow>('SELECT value FROM app_state WHERE key = $key', {
+    $key: CONVERSATION_KEY,
+  });
+  return row?.value ?? null;
+}
+
+export async function saveConversationId(conversationId: string) {
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO app_state (key, value) VALUES ($key, $value)`,
+    { $key: CONVERSATION_KEY, $value: conversationId },
+  );
 }

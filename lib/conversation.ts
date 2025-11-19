@@ -1,4 +1,4 @@
-import { generateLocalSummary } from '@/lib/summary/localSummariser';
+import { generateSummary } from '@/lib/summary';
 import { ChatMessage } from '@/types/chat';
 
 export const FALLBACK_KEYWORDS = ['건강', '기억력', '약 복용', '운동', '수면', '감정', '가족', '취미'];
@@ -107,7 +107,7 @@ function buildFallbackSummary(messages: ChatMessage[], keywords: string[]) {
 export async function summariseConversation(messages: ChatMessage[], keywords: string[]) {
   const fallback = buildFallbackSummary(messages, keywords);
   try {
-    const summary = await generateLocalSummary(messages, keywords);
+    const summary = await generateSummary(messages, keywords);
     return summary ?? fallback;
   } catch (error) {
     console.error('대화 요약 생성 실패 – 기본 요약 사용', error);
