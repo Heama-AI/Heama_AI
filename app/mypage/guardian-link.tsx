@@ -1,6 +1,7 @@
 import { HaemayaMascot } from '@/components/HaemayaMascot';
 import { BrandColors, Shadows } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import { fetchUserProfile, linkGuardianEmail, upsertUserProfile } from '@/lib/supabaseProfile';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -10,10 +11,8 @@ type UserProfile = {
   id?: string;
   email?: string;
   name?: string;
+  guardianEmail?: string;
 };
-
-const BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL ?? process.env.EXPO_PUBLIC_API_BASE_URL;
-const GUARDIAN_LINK_PATH = process.env.EXPO_PUBLIC_GUARDIAN_LINK_PATH ?? '/care/guardians/link';
 
 export default function GuardianLink() {
   const [email, setEmail] = useState('');
@@ -25,14 +24,28 @@ export default function GuardianLink() {
   useEffect(() => {
     supabase.auth
       .getUser()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         const user = data.user;
         if (!user) return;
-        setUserProfile({
-          id: user.id,
-          email: user.email ?? undefined,
-          name: (user.user_metadata as { name?: string } | null)?.name ?? undefined,
-        });
+        try {
+          const profileFromDb = await fetchUserProfile(user.id);
+          setUserProfile({
+            id: user.id,
+            email: user.email ?? undefined,
+            name:
+              profileFromDb?.name ??
+              (user.user_metadata as { name?: string } | null)?.name ??
+              undefined,
+            guardianEmail: profileFromDb?.guardianEmail ?? undefined,
+          });
+        } catch {
+          setUserProfile({
+            id: user.id,
+            email: user.email ?? undefined,
+            name: (user.user_metadata as { name?: string } | null)?.name ?? undefined,
+            guardianEmail: undefined,
+          });
+        }
       })
       .catch(() => {
         // ignore fetch errors; handled on submit
@@ -46,14 +59,6 @@ export default function GuardianLink() {
       return;
     }
 
-    if (!BACKEND_BASE_URL) {
-      Alert.alert(
-        '연동 서버 미설정',
-        'EXPO_PUBLIC_BACKEND_BASE_URL 혹은 EXPO_PUBLIC_API_BASE_URL 환경 변수를 설정해주세요.',
-      );
-      return;
-    }
-
     setSubmitting(true);
     setStatusMessage(undefined);
     try {
@@ -63,39 +68,25 @@ export default function GuardianLink() {
       }
 
       const user = data.user;
-      const payload = {
-        guardianEmail: trimmedEmail,
-        patient: {
-          id: user.id,
-          email: user.email,
-          name: (user.user_metadata as { name?: string } | null)?.name ?? undefined,
-        },
-      };
+      const nameFromMetadata = (user.user_metadata as { name?: string } | null)?.name ?? null;
 
-      const endpoint = `${BACKEND_BASE_URL.replace(/\/$/, '')}${GUARDIAN_LINK_PATH.startsWith('/') ? '' : '/'}${GUARDIAN_LINK_PATH}`;
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+      await upsertUserProfile({
+        userId: user.id,
+        email: user.email ?? null,
+        name: nameFromMetadata,
       });
 
-      const bodyText = await response.text();
-      let parsed: { message?: string } | null = null;
-      try {
-        parsed = bodyText ? (JSON.parse(bodyText) as { message?: string }) : null;
-      } catch {
-        parsed = null;
-      }
+      const updatedProfile = await linkGuardianEmail(trimmedEmail);
 
-      if (!response.ok) {
-        const errorMessage = parsed?.message ?? '보호자 연동 요청에 실패했습니다.';
-        throw new Error(errorMessage);
-      }
-
-      const successMessage = parsed?.message ?? '보호자에게 초대 메일을 전송했어요.';
       setEmail('');
-      setStatusMessage(successMessage);
-      Alert.alert('연동 요청 완료', successMessage);
+      setUserProfile({
+        id: updatedProfile.userId,
+        email: updatedProfile.email ?? undefined,
+        name: updatedProfile.name ?? undefined,
+        guardianEmail: updatedProfile.guardianEmail ?? undefined,
+      });
+      setStatusMessage('보호자에게 초대 메일을 전송했어요. (Supabase 저장 완료)');
+      Alert.alert('연동 요청 완료', '보호자 이메일을 저장했어요.');
     } catch (err) {
       const message = err instanceof Error ? err.message : '연동 요청 중 문제가 발생했습니다.';
       setStatusMessage(message);
@@ -147,6 +138,7 @@ export default function GuardianLink() {
           <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>계정 정보</Text>
           <InfoRow label="이름" value={userProfile.name ?? '이름 정보 없음'} />
           <InfoRow label="이메일" value={userProfile.email ?? '이메일 정보 없음'} />
+          <InfoRow label="보호자 이메일" value={userProfile.guardianEmail ?? '미등록'} />
         </View>
 
         <View

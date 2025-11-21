@@ -86,6 +86,7 @@ export default function PhotoNoteScreen() {
           audioUri: uri,
           transcript: transcript.text,
           metrics,
+          kind: 'photo',
         });
         setStatusMessage('분석 결과가 저장되었습니다. 건강 통계 > 사진 설명에서 확인해 주세요.');
         setHasRecentResult(true);

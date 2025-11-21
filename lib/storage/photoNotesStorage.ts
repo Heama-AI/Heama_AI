@@ -23,7 +23,13 @@ export async function loadPhotoNotes(): Promise<PhotoNote[]> {
       encoding: FileSystem.EncodingType.UTF8,
     });
     const parsed = JSON.parse(raw) as PhotoNote[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map((note) => ({
+      ...note,
+      kind: note.kind ?? 'photo',
+    }));
   } catch (error) {
     console.error('사진 노트 불러오기 실패', error);
     return [];

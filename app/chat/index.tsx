@@ -1,5 +1,6 @@
 import { BrandColors, Shadows } from '@/constants/theme';
 import { IS_EXECUTORCH_ASSISTANT } from '@/lib/assistantConfig';
+import { IS_EXECUTORCH_SUMMARY } from '@/lib/summary/config';
 import { useAssistantEngine } from '@/lib/assistantEngine';
 import { extractKeywords } from '@/lib/conversation';
 import { say, stopSpeaking } from '@/lib/speech';
@@ -7,6 +8,7 @@ import { transcribeAudio } from '@/lib/stt';
 import { startVoiceRecording, type RecordingHandle } from '@/lib/voice';
 import { useChatStore } from '@/store/chatStore';
 import { useRecordsStore } from '@/store/recordsStore';
+import { useSummaryWorkerStore } from '@/store/summaryWorkerStore';
 import type { ChatMessage } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -279,6 +281,13 @@ export default function Chat() {
     isReady: isLLMReady,
     error: assistantError,
   } = useAssistantEngine();
+  const isSummaryModelReady = useSummaryWorkerStore((state) => state.isModelReady);
+  const summaryDownloadProgress = useSummaryWorkerStore((state) => state.modelDownloadProgress);
+  const summaryDownloadPercent = useMemo(() => {
+    const progress = summaryDownloadProgress ?? 0;
+    return progress > 1 ? Math.min(100, Math.round(progress)) : Math.min(100, Math.round(progress * 100));
+  }, [summaryDownloadProgress]);
+  const summaryModelBlocked = IS_EXECUTORCH_SUMMARY && !isSummaryModelReady;
   const blockingMessage = useMemo(() => {
     if (isSavingRecord) return '요약을 저장하는 중입니다.';
     if (isTranscribing) return '음성을 받아쓰는 중입니다.';
@@ -472,6 +481,10 @@ export default function Chat() {
 
   const handleSaveRecord = useCallback(async () => {
     if (isSavingRecord) return;
+    if (summaryModelBlocked) {
+      Alert.alert('저장 대기', '로컬 요약 모델을 모두 다운로드한 뒤 다시 시도해 주세요.');
+      return;
+    }
     const chatMessages = useChatStore.getState().messages;
     if (chatMessages.length < 2) {
       Alert.alert('저장 불가', '대화가 조금 더 쌓인 후에 기록을 저장할 수 있어요.');
@@ -496,7 +509,7 @@ export default function Chat() {
     } finally {
       setIsSavingRecord(false);
     }
-  }, [addRecord, conversationId, isSavingRecord]);
+  }, [addRecord, conversationId, isSavingRecord, summaryModelBlocked]);
 
   const handleReset = () => {
     Alert.alert('새 대화 시작', '현재 대화를 초기화할까요?', [
@@ -579,7 +592,7 @@ export default function Chat() {
                     onPress={() => {
                       void handleSaveRecord();
                     }}
-                    disabled={Boolean(blockingMessage)}
+                    disabled={Boolean(blockingMessage) || summaryModelBlocked}
                     style={{ flex: 1 }}
                   />
                   <HeaderActionButton
@@ -590,6 +603,11 @@ export default function Chat() {
                     style={{ flex: 1 }}
                   />
                 </View>
+                {summaryModelBlocked ? (
+                  <Text style={{ color: BrandColors.textSecondary, fontSize: 13 }}>
+                    로컬 요약 모델 다운로드 중... {summaryDownloadPercent}% (완료 후 저장 가능)
+                  </Text>
+                ) : null}
               </View>
             </View>
           </View>

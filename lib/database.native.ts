@@ -42,6 +42,18 @@ async function applyMigrations(db: SQLite.SQLiteDatabase) {
     // ignore if the column already exists
   }
   await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS record_chunks (
+      id TEXT PRIMARY KEY NOT NULL,
+      record_id TEXT NOT NULL,
+      chunk TEXT NOT NULL,
+      embedding_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+  `);
+  await db.execAsync(`
+    CREATE INDEX IF NOT EXISTS idx_record_chunks_record_id ON record_chunks (record_id);
+  `);
+  await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_chat_messages_ts ON chat_messages (ts);
   `);
   await db.execAsync(`

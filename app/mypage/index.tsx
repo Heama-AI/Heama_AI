@@ -1,15 +1,14 @@
 import { HaemayaMascot } from '@/components/HaemayaMascot';
 import { BrandColors, Shadows } from '@/constants/theme';
+import { useAuthStore } from '@/store/authStore';
+import { useChatStore } from '@/store/chatStore';
+import { useRecordsStore } from '@/store/recordsStore';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { useAuthStore } from '@/store/authStore';
-import { useChatStore } from '@/store/chatStore';
-import { useRecordsStore } from '@/store/recordsStore';
 
 interface Profile {
   email?: string;
@@ -105,6 +104,22 @@ export default function MyPage() {
           gap: 24,
           paddingBottom: 48 + insets.bottom,
         }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 30, fontWeight: '800', color: BrandColors.textPrimary }}>마이 페이지</Text>
+        <Pressable
+          onPress={logout}
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            backgroundColor: BrandColors.surfaceSoft,
+          }}>
+          <Text style={{ color: BrandColors.textSecondary, fontWeight: '700' }}>로그아웃</Text>
+        </Pressable>
+      </View>
+
       <View
         style={{
           backgroundColor: BrandColors.surface,

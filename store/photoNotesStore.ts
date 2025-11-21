@@ -21,6 +21,10 @@ type CreatePhotoNoteInput = {
   audioUri?: string;
   transcript?: string;
   metrics?: SpeechMetrics;
+  kind?: 'photo' | 'script';
+  scriptPrompt?: string;
+  scriptMatchCount?: number;
+  scriptTotalCount?: number;
 };
 
 type PhotoNotesState = {
@@ -52,7 +56,7 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
     const existing = await loadPhotoNotes();
     set({ notes: existing, hasHydrated: true });
   },
-  addNote: async ({ imageId, description, audioUri, transcript, metrics }) => {
+  addNote: async ({ imageId, description, audioUri, transcript, metrics, kind, scriptPrompt, scriptMatchCount, scriptTotalCount }) => {
     const now = Date.now();
     const persistedAudioUri = await persistAudioFile(audioUri);
     const note: PhotoNote = {
@@ -62,6 +66,10 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
       audioUri: persistedAudioUri,
       transcript,
       metrics,
+      kind: kind ?? 'photo',
+      scriptPrompt,
+      scriptMatchCount,
+      scriptTotalCount,
       createdAt: now,
       updatedAt: now,
     };
@@ -75,16 +83,27 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
 
 async function syncNoteToSupabase(note: PhotoNote) {
   if (!supabase?.from) return;
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  const userId = userData?.user?.id;
+  if (userError || !userId) {
+    // 로그인 세션이 없으면 동기화하지 않음
+    return;
+  }
   try {
     const { error } = await supabase
       .from('photo_notes')
       .upsert(
         {
           id: note.id,
+          user_id: userId,
           image_id: note.imageId,
           description: note.description,
           transcript: note.transcript,
           metrics: note.metrics ?? null,
+          kind: note.kind ?? 'photo',
+          script_prompt: note.scriptPrompt ?? null,
+          script_match_count: note.scriptMatchCount ?? null,
+          script_total_count: note.scriptTotalCount ?? null,
           recorded_at: new Date(note.createdAt).toISOString(),
           updated_at: new Date(note.updatedAt).toISOString(),
         },

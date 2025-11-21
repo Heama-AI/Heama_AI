@@ -58,6 +58,13 @@ const SERVICE_TILES: ServiceTile[] = [
     color: '#FFE9C2',
     route: '/mypage/guardian-link',
   },
+  {
+    title: '마이 페이지',
+    subtitle: '계정 정보·로그아웃',
+    icon: 'person-circle',
+    color: '#E6F4FE',
+    route: '/mypage',
+  },
 ];
 
 export default function AuthenticatedHome() {

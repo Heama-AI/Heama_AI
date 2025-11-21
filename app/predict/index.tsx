@@ -2,6 +2,7 @@ import { BrandColors, Shadows } from '@/constants/theme';
 import { router, Stack } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRecordsStore } from '@/store/recordsStore';
 
 type ActionCardProps = {
   title: string;
@@ -41,6 +42,11 @@ function ActionCard({ title, description, onPress }: ActionCardProps) {
 
 export default function PredictCenter() {
   const insets = useSafeAreaInsets();
+  const { records } = useRecordsStore();
+
+  const latestRisk = records[0]?.stats?.riskScore ?? null;
+  const latestTitle = records[0]?.title ?? records[0]?.summary ?? null;
+  const latestUpdatedAt = records[0]?.updatedAt ? new Date(records[0].updatedAt) : null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>
@@ -59,6 +65,52 @@ export default function PredictCenter() {
             음성 기반 과제를 수행하면 건강 통계에서 활동 지표와 위험 신호를 확인할 수 있어요.
           </Text>
         </View>
+
+        <Pressable
+          onPress={() => router.push('/stats?tab=script')}
+          style={{
+            borderRadius: 24,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            backgroundColor: BrandColors.surface,
+            gap: 10,
+            ...Shadows.card,
+          }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>최근 위험율</Text>
+          <Text style={{ fontSize: 32, fontWeight: '900', color: BrandColors.primary }}>
+            {latestRisk !== null ? `${latestRisk}%` : '데이터 없음'}
+          </Text>
+          <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>
+            {latestUpdatedAt
+              ? `${latestUpdatedAt.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 업데이트`
+              : '최신 음성 데이터가 없어요.'}
+          </Text>
+          {latestTitle ? (
+            <Text style={{ color: BrandColors.textSecondary }} numberOfLines={1} ellipsizeMode="tail">
+              기준 기록: {latestTitle}
+            </Text>
+          ) : null}
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 10,
+              marginTop: 4,
+            }}>
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: BrandColors.primarySoft,
+              }}>
+              <Text style={{ color: BrandColors.primaryDark, fontWeight: '700' }}>자세히 보기</Text>
+            </View>
+            <Text style={{ color: BrandColors.textSecondary, fontSize: 12, alignSelf: 'center' }}>
+              탭하면 건강 통계로 이동
+            </Text>
+          </View>
+        </Pressable>
 
         <ActionCard
           title="사진 설명하기"

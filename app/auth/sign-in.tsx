@@ -4,6 +4,7 @@ import { IS_EXECUTORCH_ASSISTANT } from '@/lib/assistantConfig';
 import { useAssistantEngine } from '@/lib/assistantEngine';
 import { IS_EXECUTORCH_SUMMARY } from '@/lib/summary/config';
 import { supabase } from '@/lib/supabase';
+import { upsertUserProfile } from '@/lib/supabaseProfile';
 import { useAuthStore } from '@/store/authStore';
 import { useSummaryWorkerStore } from '@/store/summaryWorkerStore';
 import { router } from 'expo-router';
@@ -85,28 +86,43 @@ export default function SignIn() {
       return;
     }
 
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      Alert.alert('로그인 실패', error.message);
-      return;
-    }
+      if (error) {
+        throw new Error(error.message);
+      }
 
-    if (data.user) {
-      setUserId(data.user.id);
-      Alert.alert(
-        '로그인 성공',
-        IS_EXECUTORCH_ASSISTANT || IS_EXECUTORCH_SUMMARY
-          ? '온디바이스 모델을 불러오는 중입니다.'
-          : '메인 화면으로 이동합니다.'
-      );
+      const user = data.user;
+      if (user) {
+        const nameFromMetadata = (user.user_metadata as { name?: string } | null)?.name ?? null;
 
-      const assistantNotReady = IS_EXECUTORCH_ASSISTANT && !isReady;
-      const summaryNotReady = IS_EXECUTORCH_SUMMARY && !isSummaryReady;
+        try {
+          await upsertUserProfile({
+            userId: user.id,
+            email: user.email ?? null,
+            name: nameFromMetadata,
+          });
+        } catch (profileError) {
+          const profileMessage =
+            profileError instanceof Error ? profileError.message : '프로필을 저장하지 못했습니다.';
+          Alert.alert('프로필 저장 경고', profileMessage);
+        }
 
-      router.replace(assistantNotReady || summaryNotReady ? '/model-setup' : '/home');
+      setUserId(user.id);
+      Alert.alert('로그인 성공', '메인 화면으로 이동합니다.');
+
+        const assistantNotReady = IS_EXECUTORCH_ASSISTANT && !isReady;
+        const summaryNotReady = IS_EXECUTORCH_SUMMARY && !isSummaryReady;
+
+        router.replace(assistantNotReady || summaryNotReady ? '/model-setup' : '/home');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '로그인 중 오류가 발생했습니다.';
+      Alert.alert('로그인 실패', message);
+    } finally {
+      setLoading(false);
     }
   };
 

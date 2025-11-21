@@ -6,6 +6,9 @@ import {
   saveRecord as saveRecordToStorage,
   updateRecordTitle as updateRecordTitleInStorage,
 } from '@/lib/storage/recordsStorage';
+import { chunkMessages } from '@/lib/rag/chunker';
+import { embedText } from '@/lib/rag/embed';
+import { saveRecordChunks, deleteChunksForRecord } from '@/lib/storage/recordChunksStorage';
 import { generateKeywords } from '@/lib/summary';
 import { ChatMessage } from '@/types/chat';
 import { ConversationRecord } from '@/types/records';
@@ -71,6 +74,7 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
       records: [record, ...state.records.filter((existing) => existing.id !== record.id)],
     }));
     void saveRecordToStorage(record);
+    void indexRecordChunks(record);
     return record;
   },
   removeRecord: (id) => {
@@ -78,6 +82,7 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
       records: state.records.filter((record) => record.id !== id),
     }));
     void deleteRecordFromStorage(id);
+    void deleteChunksForRecord(id);
   },
   getRecord: (id) => get().records.find((record) => record.id === id),
   updateRecordTitle: (id, title) => {
@@ -134,3 +139,42 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
     }
   },
 }));
+
+async function indexRecordChunks(record: ConversationRecord) {
+  try {
+    if (__DEV__) {
+      console.log('[RAG] indexing record', record.id);
+    }
+    const chunks = chunkMessages(record.messages);
+    if (chunks.length === 0) return;
+
+    const embeddingResults: Array<{ chunk: string; embedding: number[] }> = [];
+    for (const chunk of chunks) {
+      const embedding = await embedText(chunk);
+      if (!embedding) continue;
+      embeddingResults.push({ chunk, embedding });
+      if (__DEV__) {
+        console.log('[RAG] chunk embedded', { recordId: record.id, chunkPreview: chunk.slice(0, 60) });
+      }
+    }
+    if (embeddingResults.length === 0) return;
+
+    const now = Date.now();
+    await saveRecordChunks(
+      embeddingResults.map((item, index) => ({
+        id: `${record.id}-chunk-${index}`,
+        recordId: record.id,
+        chunk: item.chunk,
+        embedding: item.embedding,
+        createdAt: now + index,
+      })),
+    );
+    if (__DEV__) {
+      console.log('[RAG] saved chunks', embeddingResults.length);
+    }
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('RAG 인덱싱 실패', error);
+    }
+  }
+}
