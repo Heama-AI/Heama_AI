@@ -25,6 +25,7 @@ create table if not exists public.photo_notes (
   description text not null,
   transcript text,
   metrics jsonb,
+  risk_score numeric,
   script_prompt text,
   script_match_count integer,
   script_total_count integer,

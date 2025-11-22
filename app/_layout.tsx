@@ -2,6 +2,7 @@ import { SummaryWorker } from '@/components/SummaryWorker';
 import { ExecuTorchAssistantProvider } from '@/lib/assistant.executorch';
 import { IS_EXECUTORCH_ASSISTANT } from '@/lib/assistantConfig';
 import { useAssistantEngine } from '@/lib/assistantEngine';
+import { useRiskPrediction } from '@/lib/analysis/riskModel';
 import { queryClient } from '@/lib/queryClient';
 import { IS_EXECUTORCH_SUMMARY } from '@/lib/summary/config';
 import { supabase } from '@/lib/supabase';
@@ -25,6 +26,7 @@ export default function RootLayout() {
   const router = useRouter();
   const { isReady } = useAssistantEngine();
   const isSummaryReady = useSummaryWorkerStore((state) => state.isModelReady);
+  const { isReady: isRiskModelReady } = useRiskPrediction();
 
   useEffect(() => {
     let mounted = true;
@@ -52,8 +54,9 @@ export default function RootLayout() {
     const isModelSetup = segments[0] === 'model-setup';
     const assistantNotReady = IS_EXECUTORCH_ASSISTANT && !isReady;
     const summaryNotReady = IS_EXECUTORCH_SUMMARY && !isSummaryReady;
+    const riskNotReady = !isRiskModelReady;
 
-    if ((assistantNotReady || summaryNotReady) && !isModelSetup && !inAuthGroup) {
+    if ((assistantNotReady || summaryNotReady || riskNotReady) && !isModelSetup && !inAuthGroup) {
       // Avoid redirect loop if already on model-setup or in auth flow (which handles its own redirects)
       // But if we are deep in the app and models aren't ready, force redirect.
       // Note: We exclude auth group because sign-in/sign-up pages need to be accessible without models.
@@ -61,7 +64,7 @@ export default function RootLayout() {
       // This check is primarily for when the user is already on a protected route.
       router.replace('/model-setup');
     }
-  }, [userId, isReady, isSummaryReady, segments]);
+  }, [userId, isReady, isSummaryReady, isRiskModelReady, segments]);
 
   useEffect(() => {
     void hydrateChat();

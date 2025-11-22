@@ -1,15 +1,15 @@
 import CardButton from '@/components/CardButton';
 import { BrandColors, Shadows } from '@/constants/theme';
+import { generateDistractors, generateParaphrasedDistractors } from '@/lib/rag/distractors';
+import { condenseChoiceText } from '@/lib/rag/shorten';
+import { snippet } from '@/lib/rag/snippet';
+import { loadChunks } from '@/lib/storage/recordChunksStorage';
 import { useRecordsStore } from '@/store/recordsStore';
+import { ConversationRecord } from '@/types/records';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Easing, Pressable, ScrollView, StyleProp, Text, View, ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { loadChunks } from '@/lib/storage/recordChunksStorage';
-import { ConversationRecord } from '@/types/records';
-import { snippet } from '@/lib/rag/snippet';
-import { generateDistractors, generateParaphrasedDistractors } from '@/lib/rag/distractors';
-import { condenseChoiceText } from '@/lib/rag/shorten';
 
 interface GameState {
   questionIndex: number;
@@ -71,14 +71,27 @@ function ChoiceButton({
 
 function pickUniqueChoices(correct: string, pool: string[], count = 4) {
   const unique = new Set<string>();
+  const normalized = (text: string) => normalizeText(text);
   unique.add(correct);
   for (const item of pool) {
+    if (!item) continue;
     if (unique.size >= count) break;
-    if (item && item !== correct && !isTooSimilar(correct, item)) unique.add(item);
+    if (normalized(item) === normalized(correct)) continue;
+    if (isTooSimilar(correct, item)) continue;
+    unique.add(item);
+  }
+  const fallbackChoices = ['기억이 나지 않습니다', '잘 모르겠습니다', '생각이 나지 않아요'];
+  for (const fallback of fallbackChoices) {
+    if (unique.size >= count) break;
+    unique.add(fallback);
+  }
+  // 만약 여전히 부족하면 숫자 태그로 채움
+  let fillerIndex = 1;
+  while (unique.size < count) {
+    unique.add(`선택지 ${fillerIndex}`);
+    fillerIndex += 1;
   }
   const arr = Array.from(unique);
-  while (arr.length < count) arr.push('기억이 나지 않습니다');
-  // shuffle
   for (let i = arr.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -538,19 +551,21 @@ export default function MemoryQuiz() {
               <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>{currentQuestion.explanation}</Text>
             </View>
           ) : null}
-          <Pressable
-            onPress={handleAction}
-            style={{
-              marginTop: 12,
-              backgroundColor: BrandColors.primary,
-              borderRadius: 16,
-              padding: 16,
-              alignItems: 'center',
-            }}>
-            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
-              {state.showExplanation ? '다음으로' : '정답 확인'}
-            </Text>
-          </Pressable>
+          {!state.completed ? (
+            <Pressable
+              onPress={handleAction}
+              style={{
+                marginTop: 12,
+                backgroundColor: BrandColors.primary,
+                borderRadius: 16,
+                padding: 16,
+                alignItems: 'center',
+              }}>
+              <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
+                {state.showExplanation ? '다음으로' : '정답 확인'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {state.completed ? (
@@ -570,15 +585,17 @@ export default function MemoryQuiz() {
             </Text>
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
               <Pressable
-                onPress={restartGame}
+                onPress={() => router.replace('/home')}
                 style={{
                   flex: 1,
-                  backgroundColor: BrandColors.primary,
+                  backgroundColor: BrandColors.surface,
                   borderRadius: 16,
                   padding: 14,
                   alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: BrandColors.border,
                 }}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>다시 도전</Text>
+                <Text style={{ color: BrandColors.textPrimary, fontWeight: '700' }}>메인으로 나가기</Text>
               </Pressable>
               <Pressable
                 onPress={() => router.push(`/records/${activeRecord.id}`)}

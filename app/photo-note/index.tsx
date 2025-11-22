@@ -21,6 +21,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const IMAGE_ID = 'test-image';
 const IMAGE_SOURCE = require('@/assets/test_image.png');
+type LanguageOption = 'ko' | 'en';
 
 const FOLLOWUP_MESSAGE = '고생하셨습니다! 건강 통계 > 사진 설명에서 지표를 확인하고, 다음 달에도 다시 측정해 주세요.';
 
@@ -33,6 +34,7 @@ export default function PhotoNoteScreen() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [hasRecentResult, setHasRecentResult] = useState(false);
+  const [language, setLanguage] = useState<LanguageOption>('ko');
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export default function PhotoNoteScreen() {
     async (uri: string) => {
       setIsTranscribing(true);
       try {
-        const transcript = await transcribeAudioDetailed(uri, { language: 'ko' });
+        const transcript = await transcribeAudioDetailed(uri, { language });
         const metrics = calculateSpeechMetrics(transcript);
         await addNote({
           imageId: IMAGE_ID,
@@ -98,7 +100,7 @@ export default function PhotoNoteScreen() {
         setIsTranscribing(false);
       }
     },
-    [],
+    [addNote, language],
   );
 
   const handleStopRecording = useCallback(async () => {
@@ -179,6 +181,32 @@ export default function PhotoNoteScreen() {
               borderColor: BrandColors.border,
               ...Shadows.card,
             }}>
+            <View style={{ gap: 6 }}>
+              <Text style={{ color: BrandColors.textSecondary, fontWeight: '700' }}>언어 선택</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {(['ko', 'en'] as LanguageOption[]).map((lang) => {
+                  const active = language === lang;
+                  return (
+                    <Pressable
+                      key={lang}
+                      onPress={() => setLanguage(lang)}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: active ? BrandColors.primary : BrandColors.border,
+                        backgroundColor: active ? BrandColors.primarySoft : BrandColors.surfaceSoft,
+                      }}>
+                      <Text style={{ color: active ? BrandColors.primary : BrandColors.textSecondary, fontWeight: '700' }}>
+                        {lang === 'ko' ? '한국어' : 'English'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
             <View style={{ gap: 6 }}>
               <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>음성으로 설명 남기기</Text>
               <Text style={{ color: BrandColors.textSecondary }}>

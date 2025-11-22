@@ -1,6 +1,7 @@
 import { BrandColors, Shadows } from '@/constants/theme';
 import { IS_EXECUTORCH_ASSISTANT } from '@/lib/assistantConfig';
 import { useAssistantEngine } from '@/lib/assistantEngine';
+import { useRiskPrediction } from '@/lib/analysis/riskModel';
 import { IS_EXECUTORCH_SUMMARY } from '@/lib/summary/config';
 import { useAuthStore } from '@/store/authStore';
 import { router } from 'expo-router';
@@ -14,6 +15,7 @@ export default function ModelSetupScreen() {
   const { isReady, downloadProgress, error } = useAssistantEngine();
   const { isModelReady: isSummaryReady, modelDownloadProgress: summaryProgress } =
     useSummaryWorkerStore();
+  const { isReady: isRiskReady, error: riskError } = useRiskPrediction();
   const userId = useAuthStore((state) => state.userId);
 
   useEffect(() => {
@@ -25,15 +27,17 @@ export default function ModelSetupScreen() {
   useEffect(() => {
     const assistantReady = !IS_EXECUTORCH_ASSISTANT || isReady;
     const summaryReady = !IS_EXECUTORCH_SUMMARY || isSummaryReady;
+    const riskReady = isRiskReady;
 
-    if (assistantReady && summaryReady && userId) {
+    if (assistantReady && summaryReady && riskReady && userId) {
       router.replace('/home');
     }
-  }, [isReady, isSummaryReady, userId]);
+  }, [isReady, isSummaryReady, isRiskReady, userId]);
 
   const activeDownloads = [
     IS_EXECUTORCH_ASSISTANT ? downloadProgress : null,
     IS_EXECUTORCH_SUMMARY ? summaryProgress : null,
+    isRiskReady ? 1 : 0,
   ].filter((p) => p !== null) as number[];
 
   const combinedProgress =
@@ -89,6 +93,23 @@ export default function ModelSetupScreen() {
             </Text>
             <Text style={{ color: BrandColors.danger, fontSize: 12, textAlign: 'center', marginTop: 6 }}>
               네트워크 연결을 확인한 뒤 앱을 재시작하거나 잠시 후 다시 시도해주세요.
+            </Text>
+          </View>
+        ) : riskError ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: BrandColors.danger,
+              backgroundColor: BrandColors.dangerSoft,
+              borderRadius: 18,
+              padding: 12,
+              width: '100%',
+            }}>
+            <Text style={{ color: BrandColors.danger, fontWeight: '700', textAlign: 'center' }}>
+              위험도 모델을 불러오지 못했습니다.
+            </Text>
+            <Text style={{ color: BrandColors.danger, fontSize: 12, textAlign: 'center', marginTop: 6 }}>
+              모델 파일을 확인한 뒤 앱을 재시작해주세요.
             </Text>
           </View>
         ) : null}

@@ -3,6 +3,7 @@ import { IS_EXECUTORCH_ASSISTANT } from '@/lib/assistantConfig';
 import { IS_EXECUTORCH_SUMMARY } from '@/lib/summary/config';
 import { useAssistantEngine } from '@/lib/assistantEngine';
 import { extractKeywords } from '@/lib/conversation';
+import { generateRecallQuestion } from '@/lib/rag/recall';
 import { say, stopSpeaking } from '@/lib/speech';
 import { transcribeAudio } from '@/lib/stt';
 import { startVoiceRecording, type RecordingHandle } from '@/lib/voice';
@@ -70,7 +71,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-function TypingIndicator() {
+function TypingIndicator({ label = '답변 생성 중' }: { label?: string }) {
   const [dotCount, setDotCount] = useState(1);
 
   useEffect(() => {
@@ -94,7 +95,10 @@ function TypingIndicator() {
           borderWidth: 1,
           borderColor: BrandColors.border,
         }}>
-        <Text style={{ color: BrandColors.primary, fontWeight: '600' }}>답변 생성 중{dots}</Text>
+        <Text style={{ color: BrandColors.primary, fontWeight: '600' }}>
+          {label}
+          {dots}
+        </Text>
       </View>
     </View>
   );
@@ -272,6 +276,8 @@ export default function Chat() {
   const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_RECORDING_DURATION_MS);
   const [textInput, setTextInput] = useState('');
   const recordingHandleRef = useRef<RecordingHandle | null>(null);
+  const recallInjectedRef = useRef(false);
+  const [recallLoading, setRecallLoading] = useState(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordingCountdownStartedAtRef = useRef<number | null>(null);
   const isStoppingRecordingRef = useRef(false);
@@ -321,6 +327,39 @@ export default function Chat() {
       clearRecordingCountdown();
     };
   }, []);
+
+  useEffect(() => {
+    if (recallInjectedRef.current) return;
+    if (messages.length > 0) return;
+    recallInjectedRef.current = true;
+    setRecallLoading(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const recall = await generateRecallQuestion();
+        if (!recall || cancelled) return;
+        addAssistantMessage(recall.question);
+        stopSpeaking();
+        void say(recall.speech ?? recall.question, {
+          onStart: () => setIsSpeaking(true),
+          onComplete: () => setIsSpeaking(false),
+          onError: () => setIsSpeaking(false),
+        }).catch(() => setIsSpeaking(false));
+      } finally {
+        if (!cancelled) setRecallLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      setRecallLoading(false);
+    };
+  }, [addAssistantMessage, messages.length]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      setRecallLoading(false);
+    }
+  }, [messages.length]);
 
   const sendTranscript = async (transcript: string) => {
     if (!transcript.trim() || isResponding) return;
@@ -528,6 +567,8 @@ export default function Chat() {
           setIsRecording(false);
           setRecordingLevel(0);
           setRecordingRemainingMs(MAX_RECORDING_DURATION_MS);
+          recallInjectedRef.current = false;
+          setRecallLoading(false);
           reset();
         },
       },
@@ -631,12 +672,21 @@ export default function Chat() {
               style={{ flex: 1 }}
               contentContainerStyle={{ paddingVertical: 12 }}
               ListEmptyComponent={
-                <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24, gap: 10 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>대화를 시작해보세요</Text>
-                  <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
-                    기억하고 싶은 일이나 걱정되는 점을 이야기해봐요!{"\n"} 해마가 함께 정리해드려요.
-                  </Text>
-                </View>
+                recallLoading ? (
+                  <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24 }}>
+                    <TypingIndicator label="채팅 생성 중" />
+                    <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', marginTop: 8 }}>
+                      지난 대화를 꺼내오는 중입니다...
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24, gap: 10 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>대화를 시작해보세요</Text>
+                    <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+                      기억하고 싶은 일이나 걱정되는 점을 이야기해봐요!{"\n"} 해마가 함께 정리해드려요.
+                    </Text>
+                  </View>
+                )
               }
               ListFooterComponent={isResponding ? <TypingIndicator /> : <View style={{ height: 24 }} />}
             />

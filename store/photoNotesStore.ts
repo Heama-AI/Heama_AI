@@ -21,6 +21,7 @@ type CreatePhotoNoteInput = {
   audioUri?: string;
   transcript?: string;
   metrics?: SpeechMetrics;
+  riskScore?: number | null;
   kind?: 'photo' | 'script';
   scriptPrompt?: string;
   scriptMatchCount?: number;
@@ -32,6 +33,8 @@ type PhotoNotesState = {
   hasHydrated: boolean;
   hydrate: () => Promise<void>;
   addNote: (input: CreatePhotoNoteInput) => Promise<PhotoNote>;
+  updateRiskScore: (id: string, riskScore: number | null) => Promise<void>;
+  mergeRemoteNotes: (notes: PhotoNote[]) => Promise<void>;
 };
 
 async function persistAudioFile(audioUri?: string): Promise<string | undefined> {
@@ -56,7 +59,18 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
     const existing = await loadPhotoNotes();
     set({ notes: existing, hasHydrated: true });
   },
-  addNote: async ({ imageId, description, audioUri, transcript, metrics, kind, scriptPrompt, scriptMatchCount, scriptTotalCount }) => {
+  addNote: async ({
+    imageId,
+    description,
+    audioUri,
+    transcript,
+    metrics,
+    riskScore,
+    kind,
+    scriptPrompt,
+    scriptMatchCount,
+    scriptTotalCount,
+  }) => {
     const now = Date.now();
     const persistedAudioUri = await persistAudioFile(audioUri);
     const note: PhotoNote = {
@@ -66,6 +80,7 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
       audioUri: persistedAudioUri,
       transcript,
       metrics,
+      riskScore: riskScore ?? null,
       kind: kind ?? 'photo',
       scriptPrompt,
       scriptMatchCount,
@@ -78,6 +93,41 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
     await persistPhotoNotes(nextNotes);
     void syncNoteToSupabase(note);
     return note;
+  },
+  updateRiskScore: async (id, riskScore) => {
+    set((state) => {
+      const target = state.notes.find((note) => note.id === id);
+      if (!target) {
+        if (__DEV__) console.warn('[photoNotes] riskScore update skipped, note not found', id);
+        return state;
+      }
+      return {
+        notes: state.notes.map((note) =>
+          note.id === id ? { ...note, riskScore } : note,
+        ),
+      };
+    });
+    const updated = get().notes.find((n) => n.id === id);
+    if (!updated) return;
+    await persistPhotoNotes(get().notes);
+    void syncNoteToSupabase(updated);
+  },
+  mergeRemoteNotes: async (remoteNotes) => {
+    if (!remoteNotes.length) return;
+    set((state) => {
+      const merged = new Map<string, PhotoNote>();
+      for (const note of state.notes) {
+        merged.set(note.id, note);
+      }
+      for (const remote of remoteNotes) {
+        const existing = merged.get(remote.id);
+        if (!existing || (remote.updatedAt ?? 0) > (existing.updatedAt ?? 0)) {
+          merged.set(remote.id, remote);
+        }
+      }
+      return { notes: Array.from(merged.values()) };
+    });
+    await persistPhotoNotes(get().notes);
   },
 }));
 
@@ -100,12 +150,13 @@ async function syncNoteToSupabase(note: PhotoNote) {
           description: note.description,
           transcript: note.transcript,
           metrics: note.metrics ?? null,
+          risk_score: note.riskScore ?? null,
           kind: note.kind ?? 'photo',
           script_prompt: note.scriptPrompt ?? null,
           script_match_count: note.scriptMatchCount ?? null,
           script_total_count: note.scriptTotalCount ?? null,
-          recorded_at: new Date(note.createdAt).toISOString(),
-          updated_at: new Date(note.updatedAt).toISOString(),
+          recorded_at: new Date(note.createdAt ?? Date.now()).toISOString(),
+          updated_at: new Date(note.updatedAt ?? Date.now()).toISOString(),
         },
         { onConflict: 'id' },
       );

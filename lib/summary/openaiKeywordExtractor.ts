@@ -6,11 +6,10 @@ const OPENAI_KEYWORD_TEMPERATURE = Number(process.env.EXPO_PUBLIC_OPENAI_KEYWORD
 const OPENAI_KEYWORD_MAX_TOKENS = Number(process.env.EXPO_PUBLIC_OPENAI_KEYWORD_MAX_TOKENS ?? '120');
 
 function buildTranscript(messages: ChatMessage[]) {
+  // 사용자 발화만 추출해 키워드를 사용자 응답 중심으로 정리
   return messages
-    .map((message) => {
-      const speaker = message.role === 'user' ? '사용자' : '해마';
-      return `${speaker}: ${message.text}`;
-    })
+    .filter((message) => message.role === 'user')
+    .map((message) => `사용자: ${message.text}`)
     .join('\n');
 }
 
@@ -21,6 +20,7 @@ function buildPrompt(messages: ChatMessage[]) {
 - 키워드는 한글 위주 명사/명사구로 1~3단어, 불필요한 조사·대명사(저,너,오늘) 제외.
 - 번호, 기호, 따옴표 없이 쉼표로만 구분합니다.
 - 문장/요약을 만들지 말고 키워드만 출력합니다.
+- 사용자 발화 내용을 우선으로 추출하며, 해마가 물었으나 답이 없는 질문은 반영하지 않습니다.
 
 대화 기록:
 ${transcript}

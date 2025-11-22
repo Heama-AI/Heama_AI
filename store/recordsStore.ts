@@ -5,9 +5,11 @@ import {
   loadRecords,
   saveRecord as saveRecordToStorage,
   updateRecordTitle as updateRecordTitleInStorage,
+  updateRecordSummary as updateRecordSummaryInStorage,
 } from '@/lib/storage/recordsStorage';
 import { chunkMessages } from '@/lib/rag/chunker';
 import { embedText } from '@/lib/rag/embed';
+import { snippet } from '@/lib/rag/snippet';
 import { saveRecordChunks, deleteChunksForRecord } from '@/lib/storage/recordChunksStorage';
 import { generateKeywords } from '@/lib/summary';
 import { ChatMessage } from '@/types/chat';
@@ -24,10 +26,18 @@ async function createRecord(messages: ChatMessage[], title?: string, recordIdOve
   const summary = await summariseConversation(messages, keywords);
   const recordId = recordIdOverride ?? createId();
   const quiz = buildQuiz({ id: recordId, keywords, highlights, stats });
+  const generatedTitle =
+    summary && summary.trim().length > 0
+      ? snippet(summary, 32)
+      : highlights[0]
+      ? snippet(highlights[0], 32)
+      : keywords[0]
+      ? keywords[0]
+      : null;
 
   const baseRecord = {
     id: recordId,
-    title: title ?? `대화 기록 ${new Date(now).toLocaleDateString('ko-KR')}`,
+    title: title ?? generatedTitle ?? `대화 기록 ${new Date(now).toLocaleDateString('ko-KR')}`,
     summary,
     highlights,
     keywords,
@@ -62,6 +72,7 @@ interface RecordsState {
   removeRecord: (id: string) => void;
   getRecord: (id: string) => ConversationRecord | undefined;
   updateRecordTitle: (id: string, title: string) => void;
+  updateRecordSummary: (id: string, summary: string, keywords: string[]) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -114,6 +125,41 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
       ),
     }));
     void updateRecordTitleInStorage({ id, title, updatedAt: nextUpdatedAt, fhirBundle });
+  },
+  updateRecordSummary: (id, summary, keywords) => {
+    const existing = get().records.find((record) => record.id === id);
+    if (!existing) return;
+    const nextUpdatedAt = Date.now();
+    const updatedRecord: ConversationRecord = {
+      ...existing,
+      summary,
+      keywords,
+      updatedAt: nextUpdatedAt,
+    };
+    const fhirBundle = buildConversationBundle({
+      recordId: updatedRecord.id,
+      title: updatedRecord.title,
+      summary: updatedRecord.summary,
+      highlights: updatedRecord.highlights,
+      keywords: updatedRecord.keywords,
+      createdAt: updatedRecord.createdAt,
+      updatedAt: updatedRecord.updatedAt,
+      stats: updatedRecord.stats,
+      messages: updatedRecord.messages,
+      quiz: updatedRecord.quiz,
+    });
+    set((state) => ({
+      records: state.records.map((record) =>
+        record.id === id ? { ...updatedRecord, fhirBundle } : record,
+      ),
+    }));
+    void updateRecordSummaryInStorage({
+      id,
+      summary,
+      keywords,
+      updatedAt: nextUpdatedAt,
+      fhirBundle,
+    });
   },
   hydrate: async () => {
     if (get().hasHydrated) return;
