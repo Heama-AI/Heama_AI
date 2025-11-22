@@ -71,7 +71,7 @@ export type MetricLevel = 'normal' | 'warning' | 'risk';
 export type OverallLevel = 'normal' | 'warning' | 'risk' | 'critical';
 
 export type MetricSummary = {
-  key: 'speechRateWpm' | 'meanPauseDurationSec' | 'mlu';
+  key: 'speechRateWpm' | 'meanPauseDurationSec' | 'mlu' | 'pausesPerMinute' | 'ttr';
   label: string;
   level: MetricLevel;
   statusText: string;
@@ -87,7 +87,7 @@ export type SpeechMetricsSummary = {
 };
 
 export type MetricTrendDetail = {
-  key: 'speechRateWpm' | 'meanPauseDurationSec' | 'mlu';
+  key: 'speechRateWpm' | 'meanPauseDurationSec' | 'mlu' | 'pausesPerMinute' | 'ttr';
   label: string;
   level: MetricLevel;
   changePercent: number;
@@ -110,7 +110,9 @@ export function summarizeSpeechMetrics(metrics?: SpeechMetrics | null): SpeechMe
   const speechRateSummary = buildSpeechRateSummary(metrics.speechRateWpm);
   const pauseSummary = buildPauseSummary(metrics.meanPauseDurationSec);
   const mluSummary = buildMluSummary(metrics.mlu);
-  const coreSummaries: MetricSummary[] = [speechRateSummary, pauseSummary, mluSummary];
+  const pauseFreqSummary = buildPauseFrequencySummary(metrics.pausesPerMinute);
+  const ttrSummary = buildTtrSummary(metrics.ttr);
+  const coreSummaries: MetricSummary[] = [speechRateSummary, pauseSummary, mluSummary, pauseFreqSummary, ttrSummary];
 
   const riskCount = coreSummaries.filter((item) => item.level === 'risk').length;
   const warningCount = coreSummaries.filter((item) => item.level === 'warning').length;
@@ -258,6 +260,62 @@ function buildMluSummary(value: number): MetricSummary {
     level: 'risk',
     statusText: '문장이 많이 짧아요.',
     helperText: '평균 9단어 미만으로 문장을 마치고 있습니다.',
+  };
+}
+
+function buildPauseFrequencySummary(value: number): MetricSummary {
+  if (value <= 6) {
+    return {
+      key: 'pausesPerMinute',
+      label: '분당 쉬는 횟수',
+      level: 'normal',
+      statusText: '쉬는 빈도가 안정적이에요.',
+      helperText: '분당 6회 이하로 자연스럽게 말하고 있어요.',
+    };
+  }
+  if (value <= 9) {
+    return {
+      key: 'pausesPerMinute',
+      label: '분당 쉬는 횟수',
+      level: 'warning',
+      statusText: '쉬는 빈도가 조금 많아요.',
+      helperText: '분당 6~9회로 평소보다 잦을 수 있어요.',
+    };
+  }
+  return {
+    key: 'pausesPerMinute',
+    label: '분당 쉬는 횟수',
+    level: 'risk',
+    statusText: '쉬는 횟수가 많아요.',
+    helperText: '분당 9회 이상 쉬고 있어요.',
+  };
+}
+
+function buildTtrSummary(value: number): MetricSummary {
+  if (value >= 0.48) {
+    return {
+      key: 'ttr',
+      label: '어휘 다양도',
+      level: 'normal',
+      statusText: '어휘가 다양해요.',
+      helperText: '어휘 반복 없이 고르게 사용하고 있어요.',
+    };
+  }
+  if (value >= 0.35) {
+    return {
+      key: 'ttr',
+      label: '어휘 다양도',
+      level: 'warning',
+      statusText: '어휘가 다소 반복돼요.',
+      helperText: '비슷한 단어를 조금 더 자주 쓰고 있어요.',
+    };
+  }
+  return {
+    key: 'ttr',
+    label: '어휘 다양도',
+    level: 'risk',
+    statusText: '어휘 반복이 많아요.',
+    helperText: '다양한 표현을 더 시도해 보세요.',
   };
 }
 

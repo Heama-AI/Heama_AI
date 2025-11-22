@@ -9,4 +9,9 @@ export type PhotoNote = {
   audioUri?: string;
   transcript?: string;
   metrics?: SpeechMetrics;
+  riskScore?: number | null;
+  kind?: 'photo' | 'script';
+  scriptPrompt?: string;
+  scriptMatchCount?: number;
+  scriptTotalCount?: number;
 };

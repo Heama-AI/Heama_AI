@@ -144,3 +144,28 @@ export async function updateRecordTitle(input: {
     },
   );
 }
+
+export async function updateRecordSummary(input: {
+  id: string;
+  summary: string;
+  keywords: string[];
+  updatedAt: number;
+  fhirBundle: ConversationRecord['fhirBundle'];
+}) {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE records
+     SET summary = $summary,
+         keywords_json = $keywords,
+         updated_at = $updatedAt,
+         fhir_bundle_json = $fhirBundle
+     WHERE id = $id`,
+    {
+      $summary: input.summary,
+      $keywords: JSON.stringify(input.keywords),
+      $id: input.id,
+      $updatedAt: input.updatedAt,
+      $fhirBundle: JSON.stringify(input.fhirBundle),
+    },
+  );
+}

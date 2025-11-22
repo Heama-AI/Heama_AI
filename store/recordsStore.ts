@@ -5,7 +5,12 @@ import {
   loadRecords,
   saveRecord as saveRecordToStorage,
   updateRecordTitle as updateRecordTitleInStorage,
+  updateRecordSummary as updateRecordSummaryInStorage,
 } from '@/lib/storage/recordsStorage';
+import { chunkMessages } from '@/lib/rag/chunker';
+import { embedText } from '@/lib/rag/embed';
+import { snippet } from '@/lib/rag/snippet';
+import { saveRecordChunks, deleteChunksForRecord } from '@/lib/storage/recordChunksStorage';
 import { generateKeywords } from '@/lib/summary';
 import { ChatMessage } from '@/types/chat';
 import { ConversationRecord } from '@/types/records';
@@ -21,10 +26,18 @@ async function createRecord(messages: ChatMessage[], title?: string, recordIdOve
   const summary = await summariseConversation(messages, keywords);
   const recordId = recordIdOverride ?? createId();
   const quiz = buildQuiz({ id: recordId, keywords, highlights, stats });
+  const generatedTitle =
+    summary && summary.trim().length > 0
+      ? snippet(summary, 32)
+      : highlights[0]
+      ? snippet(highlights[0], 32)
+      : keywords[0]
+      ? keywords[0]
+      : null;
 
   const baseRecord = {
     id: recordId,
-    title: title ?? `대화 기록 ${new Date(now).toLocaleDateString('ko-KR')}`,
+    title: title ?? generatedTitle ?? `대화 기록 ${new Date(now).toLocaleDateString('ko-KR')}`,
     summary,
     highlights,
     keywords,
@@ -59,6 +72,7 @@ interface RecordsState {
   removeRecord: (id: string) => void;
   getRecord: (id: string) => ConversationRecord | undefined;
   updateRecordTitle: (id: string, title: string) => void;
+  updateRecordSummary: (id: string, summary: string, keywords: string[]) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -71,6 +85,7 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
       records: [record, ...state.records.filter((existing) => existing.id !== record.id)],
     }));
     void saveRecordToStorage(record);
+    void indexRecordChunks(record);
     return record;
   },
   removeRecord: (id) => {
@@ -78,6 +93,7 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
       records: state.records.filter((record) => record.id !== id),
     }));
     void deleteRecordFromStorage(id);
+    void deleteChunksForRecord(id);
   },
   getRecord: (id) => get().records.find((record) => record.id === id),
   updateRecordTitle: (id, title) => {
@@ -110,6 +126,41 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
     }));
     void updateRecordTitleInStorage({ id, title, updatedAt: nextUpdatedAt, fhirBundle });
   },
+  updateRecordSummary: (id, summary, keywords) => {
+    const existing = get().records.find((record) => record.id === id);
+    if (!existing) return;
+    const nextUpdatedAt = Date.now();
+    const updatedRecord: ConversationRecord = {
+      ...existing,
+      summary,
+      keywords,
+      updatedAt: nextUpdatedAt,
+    };
+    const fhirBundle = buildConversationBundle({
+      recordId: updatedRecord.id,
+      title: updatedRecord.title,
+      summary: updatedRecord.summary,
+      highlights: updatedRecord.highlights,
+      keywords: updatedRecord.keywords,
+      createdAt: updatedRecord.createdAt,
+      updatedAt: updatedRecord.updatedAt,
+      stats: updatedRecord.stats,
+      messages: updatedRecord.messages,
+      quiz: updatedRecord.quiz,
+    });
+    set((state) => ({
+      records: state.records.map((record) =>
+        record.id === id ? { ...updatedRecord, fhirBundle } : record,
+      ),
+    }));
+    void updateRecordSummaryInStorage({
+      id,
+      summary,
+      keywords,
+      updatedAt: nextUpdatedAt,
+      fhirBundle,
+    });
+  },
   hydrate: async () => {
     if (get().hasHydrated) return;
     try {
@@ -134,3 +185,42 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
     }
   },
 }));
+
+async function indexRecordChunks(record: ConversationRecord) {
+  try {
+    if (__DEV__) {
+      console.log('[RAG] indexing record', record.id);
+    }
+    const chunks = chunkMessages(record.messages);
+    if (chunks.length === 0) return;
+
+    const embeddingResults: Array<{ chunk: string; embedding: number[] }> = [];
+    for (const chunk of chunks) {
+      const embedding = await embedText(chunk);
+      if (!embedding) continue;
+      embeddingResults.push({ chunk, embedding });
+      if (__DEV__) {
+        console.log('[RAG] chunk embedded', { recordId: record.id, chunkPreview: chunk.slice(0, 60) });
+      }
+    }
+    if (embeddingResults.length === 0) return;
+
+    const now = Date.now();
+    await saveRecordChunks(
+      embeddingResults.map((item, index) => ({
+        id: `${record.id}-chunk-${index}`,
+        recordId: record.id,
+        chunk: item.chunk,
+        embedding: item.embedding,
+        createdAt: now + index,
+      })),
+    );
+    if (__DEV__) {
+      console.log('[RAG] saved chunks', embeddingResults.length);
+    }
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('RAG 인덱싱 실패', error);
+    }
+  }
+}

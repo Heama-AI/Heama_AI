@@ -50,7 +50,7 @@ export function deriveStats(messages: ChatMessage[]) {
       userTurns: 0,
       assistantTurns: 0,
       durationMinutes: 0,
-      riskScore: 35,
+      riskScore: 0,
       moodScore: 65,
     };
   }
@@ -61,14 +61,6 @@ export function deriveStats(messages: ChatMessage[]) {
   const durationMinutes = clamp(Math.round((Math.max(...timestamps) - Math.min(...timestamps)) / 60000), 1, 90);
 
   const combinedText = messages.map((message) => message.text).join(' ');
-  const riskSignals = ['잊', '기억', '혼란', '불안', '걱정', '약', '검사', '다쳤', '길'];
-  let riskScore = 40;
-
-  for (const signal of riskSignals) {
-    const occurrences = combinedText.split(signal).length - 1;
-    riskScore += occurrences * 6;
-  }
-
   const moodSignals = ['좋', '행복', '안정', '편안', '감사', '즐겁', '재밌'];
   let moodScore = 60;
   for (const signal of moodSignals) {
@@ -76,14 +68,13 @@ export function deriveStats(messages: ChatMessage[]) {
     moodScore += occurrences * 4;
   }
 
-  moodScore -= (riskScore - 50) * 0.4;
-
   return {
     totalTurns: messages.length,
     userTurns,
     assistantTurns,
     durationMinutes,
-    riskScore: Math.round(clamp(riskScore, 5, 95)),
+    // 대화 텍스트 기반 위험도 산출을 중단하고 기본값으로 고정
+    riskScore: 0,
     moodScore: Math.round(clamp(moodScore, 10, 95)),
   };
 }
@@ -91,7 +82,7 @@ export function deriveStats(messages: ChatMessage[]) {
 function buildFallbackSummary(messages: ChatMessage[], keywords: string[]) {
   const lastUserMessage = [...messages].reverse().find((message) => message.role === 'user');
   const summaryBase = messages
-    .filter((message) => message.role === 'assistant')
+    .filter((message) => message.role === 'user')
     .slice(-2)
     .map((message) => message.text)
     .join(' ');

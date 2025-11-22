@@ -14,11 +14,6 @@ export default function Records() {
   const hasHydrated = useRecordsStore((state) => state.hasHydrated);
   const insets = useSafeAreaInsets();
 
-  const averageRisk = useMemo(() => {
-    if (records.length === 0) return 0;
-    return Math.round(records.reduce((acc, record) => acc + record.stats.riskScore, 0) / records.length);
-  }, [records]);
-
   if (!hasHydrated) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>
@@ -57,10 +52,6 @@ export default function Records() {
               {records.length}개
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontSize: 15, color: BrandColors.textSecondary }}>평균 위험 지수</Text>
-            <Text style={{ fontSize: 28, fontWeight: '800', color: BrandColors.primary }}>{averageRisk}점</Text>
-          </View>
         </View>
         </View>
 
@@ -88,7 +79,6 @@ export default function Records() {
                 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>{item.title}</Text>
-                  <Text style={{ color: BrandColors.primary, fontWeight: '700' }}>{item.stats.riskScore}점</Text>
                 </View>
                 <Text style={{ color: BrandColors.textSecondary, fontSize: 12 }}>{formatDate(item.createdAt)}</Text>
                 <Text style={{ color: BrandColors.textPrimary, lineHeight: 20 }} numberOfLines={2}>

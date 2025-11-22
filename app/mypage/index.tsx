@@ -1,15 +1,14 @@
 import { HaemayaMascot } from '@/components/HaemayaMascot';
 import { BrandColors, Shadows } from '@/constants/theme';
-import { supabase } from '@/lib/supabase';
-import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
 import { useRecordsStore } from '@/store/recordsStore';
+import { supabase } from '@/lib/supabase';
+import { router } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Profile {
   email?: string;
@@ -21,6 +20,9 @@ export default function MyPage() {
   const { reset: resetChat } = useChatStore();
   const { records } = useRecordsStore();
   const setUserId = useAuthStore((state) => state.setUserId);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
   const { width } = useWindowDimensions();
   const isCompact = width < 420;
   const stackMetrics = width < 640;
@@ -48,17 +50,21 @@ export default function MyPage() {
     if (records.length === 0) {
       return {
         totalConversations: 0,
-        averageRisk: 35,
-        averageMood: 65,
+        averageMood: 0,
+        averageRisk: 0,
         weeklyTrend: 0,
       };
     }
 
     const totalConversations = records.length;
-    const averageRisk =
-      records.reduce((acc, record) => acc + record.stats.riskScore, 0) / totalConversations;
     const averageMood =
-      records.reduce((acc, record) => acc + record.stats.moodScore, 0) / totalConversations;
+      records.reduce((acc, record) => acc + (record.stats.moodScore ?? 0), 0) / totalConversations;
+    const riskValues = records
+      .map((r) => r.stats?.riskScore ?? null)
+      .filter((v): v is number => typeof v === 'number');
+    const averageRisk = riskValues.length
+      ? Math.round(riskValues.reduce((acc, val) => acc + val, 0) / riskValues.length)
+      : 0;
 
     const now = Date.now();
     const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -75,8 +81,8 @@ export default function MyPage() {
 
     return {
       totalConversations,
-      averageRisk: Math.round(averageRisk),
       averageMood: Math.round(averageMood),
+      averageRisk,
       weeklyTrend: Math.round(weeklyTrend),
     };
   }, [records]);
@@ -95,6 +101,37 @@ export default function MyPage() {
     router.replace('/auth/sign-in');
   };
 
+  const changePassword = async () => {
+    const trimmed = newPassword.trim();
+    if (!trimmed || !confirmPassword.trim()) {
+      Alert.alert('입력 필요', '새 비밀번호를 모두 입력해주세요.');
+      return;
+    }
+    if (trimmed.length < 6) {
+      Alert.alert('비밀번호 조건', '비밀번호는 6자 이상이어야 합니다.');
+      return;
+    }
+    if (trimmed !== confirmPassword.trim()) {
+      Alert.alert('불일치', '비밀번호가 서로 일치하지 않습니다.');
+      return;
+    }
+    try {
+      setChangingPassword(true);
+      const { error } = await supabase.auth.updateUser({ password: trimmed });
+      if (error) {
+        throw error;
+      }
+      Alert.alert('변경 완료', '비밀번호가 변경되었어요.');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '비밀번호 변경에 실패했습니다.';
+      Alert.alert('변경 실패', message);
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>
       <ScrollView
@@ -105,6 +142,22 @@ export default function MyPage() {
           gap: 24,
           paddingBottom: 48 + insets.bottom,
         }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 30, fontWeight: '800', color: BrandColors.textPrimary }}>마이 페이지</Text>
+        <Pressable
+          onPress={logout}
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            backgroundColor: BrandColors.surfaceSoft,
+          }}>
+          <Text style={{ color: BrandColors.textSecondary, fontWeight: '700' }}>로그아웃</Text>
+        </Pressable>
+      </View>
+
       <View
         style={{
           backgroundColor: BrandColors.surface,
@@ -143,18 +196,77 @@ export default function MyPage() {
             style={stackMetrics ? { width: '100%' } : { flex: 1 }}
           />
           <DashboardMetric
-            label="평균 위험 지수"
-            value={`${metrics.averageRisk}점`}
+            label="평균 AI 위험율"
+            value={`${metrics.averageRisk}%`}
             accent={BrandColors.primary}
             style={stackMetrics ? { width: '100%' } : { flex: 1 }}
           />
-          <DashboardMetric
-            label="평균 감정 점수"
-            value={`${metrics.averageMood}`}
-            accent={BrandColors.accent}
-            style={stackMetrics ? { width: '100%' } : { flex: 1 }}
+      </View>
+    </View>
+
+      <View
+        style={{
+          backgroundColor: BrandColors.surface,
+          borderRadius: 26,
+          padding: 22,
+          gap: 14,
+          ...Shadows.card,
+        }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>비밀번호 변경</Text>
+        <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>
+          현재 로그인 상태에서 바로 변경할 수 있어요.
+        </Text>
+        <View style={{ gap: 10 }}>
+          <TextInput
+            placeholder="새 비밀번호 (6자 이상)"
+            placeholderTextColor={BrandColors.textSecondary}
+            secureTextEntry
+            value={newPassword}
+            onChangeText={setNewPassword}
+            style={{
+              borderWidth: 1,
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderColor: BrandColors.border,
+              backgroundColor: BrandColors.surfaceSoft,
+              color: BrandColors.textPrimary,
+            }}
+          />
+          <TextInput
+            placeholder="새 비밀번호 확인"
+            placeholderTextColor={BrandColors.textSecondary}
+            secureTextEntry
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            style={{
+              borderWidth: 1,
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              borderColor: BrandColors.border,
+              backgroundColor: BrandColors.surfaceSoft,
+              color: BrandColors.textPrimary,
+            }}
           />
         </View>
+        <Pressable
+          onPress={changePassword}
+          disabled={changingPassword}
+          style={{
+            marginTop: 4,
+            paddingVertical: 14,
+            borderRadius: 14,
+            alignItems: 'center',
+            backgroundColor: changingPassword ? BrandColors.surfaceSoft : BrandColors.primary,
+            borderWidth: changingPassword ? 1 : 0,
+            borderColor: changingPassword ? BrandColors.border : undefined,
+            opacity: changingPassword ? 0.7 : 1,
+          }}>
+          <Text style={{ color: changingPassword ? BrandColors.textSecondary : '#fff', fontWeight: '700' }}>
+            {changingPassword ? '변경 중...' : '비밀번호 변경'}
+          </Text>
+        </Pressable>
       </View>
 
       <View

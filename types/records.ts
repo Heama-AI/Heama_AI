@@ -16,8 +16,8 @@ export type ConversationStats = {
   userTurns: number;
   assistantTurns: number;
   durationMinutes: number;
-  riskScore: number;
   moodScore: number;
+  riskScore?: number;
 };
 
 export interface ConversationRecord {

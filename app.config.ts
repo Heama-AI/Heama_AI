@@ -2,24 +2,23 @@ import 'dotenv/config';
 import type { ExpoConfig } from 'expo/config';
 
 const config: ExpoConfig = {
-  name: 'dementia-care',
-  slug: 'dementia-care',
+  name: '해마 AI',
+  slug: 'haema-ai',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/images/icon.png',
-  scheme: 'dementiacare',
+  scheme: 'haemaai',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.anonymous.dementia-care',
+    bundleIdentifier: 'com.anonymous.haemaai',
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: '#E6F4FE',
-      foregroundImage: './assets/images/android-icon-foreground.png',
-      backgroundImage: './assets/images/android-icon-background.png',
-      monochromeImage: './assets/images/android-icon-monochrome.png',
+      // iOS/Android 모두 동일 아이콘을 사용합니다.
+      foregroundImage: './assets/images/icon.png',
+      backgroundColor: '#ffffff',
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,

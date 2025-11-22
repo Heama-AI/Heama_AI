@@ -2,8 +2,6 @@ import { BrandColors, Shadows } from '@/constants/theme';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,11 +11,14 @@ export default function RecordDetail() {
   const getRecord = useRecordsStore((state) => state.getRecord);
   const removeRecord = useRecordsStore((state) => state.removeRecord);
   const updateRecordTitle = useRecordsStore((state) => state.updateRecordTitle);
+  const updateRecordSummary = useRecordsStore((state) => state.updateRecordSummary);
   const hasHydrated = useRecordsStore((state) => state.hasHydrated);
 
   const record = id ? getRecord(id) : undefined;
   const [title, setTitle] = useState(record?.title ?? '');
-  const [isExporting, setIsExporting] = useState(false);
+  const [summaryText, setSummaryText] = useState(record?.summary ?? '');
+  const [keywordsText, setKeywordsText] = useState(record?.keywords.join(', ') ?? '');
+  const [editing, setEditing] = useState(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const stackStats = width < 520;
@@ -25,6 +26,8 @@ export default function RecordDetail() {
 
   useEffect(() => {
     setTitle(record?.title ?? '');
+    setSummaryText(record?.summary ?? '');
+    setKeywordsText(record?.keywords.join(', ') ?? '');
   }, [record?.title]);
 
   if (!hasHydrated) {
@@ -101,40 +104,19 @@ export default function RecordDetail() {
     }
   };
 
-  const handleExportFhir = async () => {
-    if (!record || isExporting) return;
-    setIsExporting(true);
-    let fileUri: string | null = null;
-    try {
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        Alert.alert('공유 미지원', '이 플랫폼에서는 파일 공유가 지원되지 않습니다.');
-        return;
-      }
-
-      const directory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-      if (!directory) {
-        Alert.alert('공유 실패', '임시 파일을 저장할 위치를 찾을 수 없습니다.');
-        return;
-      }
-
-      fileUri = `${directory}heama-fhir-${record.id}.json`;
-      const json = JSON.stringify(record.fhirBundle, null, 2);
-      await FileSystem.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
-
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/fhir+json',
-        dialogTitle: 'FHIR 번들 공유',
-      });
-    } catch (error) {
-      console.error('Failed to share FHIR bundle', error);
-      Alert.alert('공유 실패', 'FHIR 번들을 공유하는 중 오류가 발생했습니다.');
-    } finally {
-      if (fileUri) {
-        await FileSystem.deleteAsync(fileUri, { idempotent: true }).catch(() => undefined);
-      }
-      setIsExporting(false);
+  const handleSaveSummary = () => {
+    const summaryTrimmed = summaryText.trim();
+    const keywordsParsed = keywordsText
+      .split(',')
+      .map((kw) => kw.trim())
+      .filter((kw) => kw.length > 0);
+    if (!summaryTrimmed) {
+      Alert.alert('요약', '요약은 비워둘 수 없습니다.');
+      setSummaryText(record.summary);
+      return;
     }
+    updateRecordSummary(record.id, summaryTrimmed, keywordsParsed);
+    Alert.alert('저장 완료', '요약과 키워드를 저장했어요.');
   };
 
   return (
@@ -180,26 +162,7 @@ export default function RecordDetail() {
           </Text>
         </View>
 
-        <View style={{ flexDirection: stackStats ? 'column' : 'row', gap: 12 }}>
-          <StatCard
-            label="치매 위험 지수"
-            value={`${record.stats.riskScore}`}
-            accent={BrandColors.primary}
-            style={stackStats ? { width: '100%' } : undefined}
-          />
-          <StatCard
-            label="감정 점수"
-            value={`${record.stats.moodScore}`}
-            accent={BrandColors.accent}
-            style={stackStats ? { width: '100%' } : undefined}
-          />
-          <StatCard
-            label="대화 횟수"
-            value={`${record.stats.totalTurns}`}
-            accent={BrandColors.secondary}
-            style={stackStats ? { width: '100%' } : undefined}
-          />
-        </View>
+        <View />
       </View>
 
         <View
@@ -207,14 +170,87 @@ export default function RecordDetail() {
             backgroundColor: BrandColors.surface,
             borderRadius: 24,
             padding: 22,
-          gap: 14,
-          borderWidth: 1,
-          borderColor: BrandColors.border,
-          ...Shadows.card,
-        }}>
-        <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>요약</Text>
-        <Text style={{ fontSize: 16, lineHeight: 24, color: BrandColors.textSecondary }}>{record.summary}</Text>
-      </View>
+            gap: 14,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            ...Shadows.card,
+          }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>요약 / 키워드</Text>
+            <Pressable
+              onPress={() => setEditing((prev) => !prev)}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: BrandColors.border,
+                backgroundColor: BrandColors.surfaceSoft,
+              }}>
+              <Text style={{ color: BrandColors.textSecondary, fontWeight: '700' }}>
+                {editing ? '취소' : '내용 수정하기'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {editing ? (
+            <>
+              <TextInput
+                multiline
+                value={summaryText}
+                onChangeText={setSummaryText}
+                style={{
+                  borderWidth: 1,
+                  borderColor: BrandColors.border,
+                  borderRadius: 14,
+                  padding: 12,
+                  minHeight: 120,
+                  textAlignVertical: 'top',
+                  color: BrandColors.textPrimary,
+                  backgroundColor: BrandColors.surfaceSoft,
+                }}
+                placeholder="요약을 입력하세요"
+                placeholderTextColor={BrandColors.textSecondary}
+              />
+              <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>키워드</Text>
+              <TextInput
+                value={keywordsText}
+                onChangeText={setKeywordsText}
+                style={{
+                  borderWidth: 1,
+                  borderColor: BrandColors.border,
+                  borderRadius: 14,
+                  padding: 12,
+                  color: BrandColors.textPrimary,
+                  backgroundColor: BrandColors.surfaceSoft,
+                }}
+                placeholder="쉼표(,)로 구분해 입력하세요"
+                placeholderTextColor={BrandColors.textSecondary}
+              />
+              <Pressable
+                onPress={() => {
+                  handleSaveSummary();
+                  setEditing(false);
+                }}
+                style={{
+                  marginTop: 8,
+                  borderRadius: 14,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                  backgroundColor: BrandColors.primary,
+                }}>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>저장</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={{ fontSize: 16, lineHeight: 24, color: BrandColors.textSecondary }}>{record.summary}</Text>
+              <Text style={{ fontSize: 16, lineHeight: 22, color: BrandColors.textSecondary }}>
+                {record.keywords.join(', ')}
+              </Text>
+            </>
+          )}
+        </View>
 
         <View
           style={{
@@ -253,25 +289,6 @@ export default function RecordDetail() {
 
         <View style={{ flexDirection: stackActions ? 'column' : 'row', gap: 12 }}>
           <Pressable
-            onPress={handleExportFhir}
-            disabled={isExporting}
-            style={[
-              stackActions ? { width: '100%' } : { flex: 1 },
-              {
-                paddingVertical: 14,
-                borderRadius: 16,
-                backgroundColor: BrandColors.surface,
-                alignItems: 'center',
-                borderWidth: 1,
-                borderColor: BrandColors.primary,
-                opacity: isExporting ? 0.6 : 1,
-              },
-            ]}>
-            <Text style={{ color: BrandColors.primary, fontWeight: '600' }}>
-              {isExporting ? '공유 준비 중...' : 'FHIR 공유하기'}
-            </Text>
-          </Pressable>
-          <Pressable
             onPress={() => router.push({ pathname: '/games/memory-quiz', params: { recordId: record.id } })}
             style={[
               stackActions ? { width: '100%' } : { flex: 1 },
@@ -302,37 +319,5 @@ export default function RecordDetail() {
         </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  accent,
-  style,
-}: {
-  label: string;
-  value: string;
-  accent: string;
-  style?: StyleProp<ViewStyle>;
-}) {
-  return (
-    <View
-      style={[
-        {
-          flex: 1,
-          borderRadius: 18,
-          padding: 16,
-          gap: 6,
-          backgroundColor: BrandColors.primarySoft,
-          borderWidth: 1,
-          borderColor: BrandColors.border,
-          alignItems: 'center',
-        },
-        style,
-      ]}>
-      <Text style={{ color: BrandColors.textSecondary, fontSize: 13 }}>{label}</Text>
-      <Text style={{ fontSize: 22, fontWeight: '700', color: accent }}>{value}</Text>
-    </View>
   );
 }

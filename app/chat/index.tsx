@@ -1,12 +1,15 @@
 import { BrandColors, Shadows } from '@/constants/theme';
 import { IS_EXECUTORCH_ASSISTANT } from '@/lib/assistantConfig';
+import { IS_EXECUTORCH_SUMMARY } from '@/lib/summary/config';
 import { useAssistantEngine } from '@/lib/assistantEngine';
 import { extractKeywords } from '@/lib/conversation';
+import { generateRecallQuestion } from '@/lib/rag/recall';
 import { say, stopSpeaking } from '@/lib/speech';
 import { transcribeAudio } from '@/lib/stt';
 import { startVoiceRecording, type RecordingHandle } from '@/lib/voice';
 import { useChatStore } from '@/store/chatStore';
 import { useRecordsStore } from '@/store/recordsStore';
+import { useSummaryWorkerStore } from '@/store/summaryWorkerStore';
 import type { ChatMessage } from '@/types/chat';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -68,7 +71,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   );
 }
 
-function TypingIndicator() {
+function TypingIndicator({ label = '답변 생성 중' }: { label?: string }) {
   const [dotCount, setDotCount] = useState(1);
 
   useEffect(() => {
@@ -92,7 +95,10 @@ function TypingIndicator() {
           borderWidth: 1,
           borderColor: BrandColors.border,
         }}>
-        <Text style={{ color: BrandColors.primary, fontWeight: '600' }}>답변 생성 중{dots}</Text>
+        <Text style={{ color: BrandColors.primary, fontWeight: '600' }}>
+          {label}
+          {dots}
+        </Text>
       </View>
     </View>
   );
@@ -270,6 +276,8 @@ export default function Chat() {
   const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_RECORDING_DURATION_MS);
   const [textInput, setTextInput] = useState('');
   const recordingHandleRef = useRef<RecordingHandle | null>(null);
+  const recallInjectedRef = useRef(false);
+  const [recallLoading, setRecallLoading] = useState(false);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordingCountdownStartedAtRef = useRef<number | null>(null);
   const isStoppingRecordingRef = useRef(false);
@@ -279,6 +287,13 @@ export default function Chat() {
     isReady: isLLMReady,
     error: assistantError,
   } = useAssistantEngine();
+  const isSummaryModelReady = useSummaryWorkerStore((state) => state.isModelReady);
+  const summaryDownloadProgress = useSummaryWorkerStore((state) => state.modelDownloadProgress);
+  const summaryDownloadPercent = useMemo(() => {
+    const progress = summaryDownloadProgress ?? 0;
+    return progress > 1 ? Math.min(100, Math.round(progress)) : Math.min(100, Math.round(progress * 100));
+  }, [summaryDownloadProgress]);
+  const summaryModelBlocked = IS_EXECUTORCH_SUMMARY && !isSummaryModelReady;
   const blockingMessage = useMemo(() => {
     if (isSavingRecord) return '요약을 저장하는 중입니다.';
     if (isTranscribing) return '음성을 받아쓰는 중입니다.';
@@ -312,6 +327,39 @@ export default function Chat() {
       clearRecordingCountdown();
     };
   }, []);
+
+  useEffect(() => {
+    if (recallInjectedRef.current) return;
+    if (messages.length > 0) return;
+    recallInjectedRef.current = true;
+    setRecallLoading(true);
+    let cancelled = false;
+    (async () => {
+      try {
+        const recall = await generateRecallQuestion();
+        if (!recall || cancelled) return;
+        addAssistantMessage(recall.question);
+        stopSpeaking();
+        void say(recall.speech ?? recall.question, {
+          onStart: () => setIsSpeaking(true),
+          onComplete: () => setIsSpeaking(false),
+          onError: () => setIsSpeaking(false),
+        }).catch(() => setIsSpeaking(false));
+      } finally {
+        if (!cancelled) setRecallLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      setRecallLoading(false);
+    };
+  }, [addAssistantMessage, messages.length]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      setRecallLoading(false);
+    }
+  }, [messages.length]);
 
   const sendTranscript = async (transcript: string) => {
     if (!transcript.trim() || isResponding) return;
@@ -472,6 +520,10 @@ export default function Chat() {
 
   const handleSaveRecord = useCallback(async () => {
     if (isSavingRecord) return;
+    if (summaryModelBlocked) {
+      Alert.alert('저장 대기', '로컬 요약 모델을 모두 다운로드한 뒤 다시 시도해 주세요.');
+      return;
+    }
     const chatMessages = useChatStore.getState().messages;
     if (chatMessages.length < 2) {
       Alert.alert('저장 불가', '대화가 조금 더 쌓인 후에 기록을 저장할 수 있어요.');
@@ -496,7 +548,7 @@ export default function Chat() {
     } finally {
       setIsSavingRecord(false);
     }
-  }, [addRecord, conversationId, isSavingRecord]);
+  }, [addRecord, conversationId, isSavingRecord, summaryModelBlocked]);
 
   const handleReset = () => {
     Alert.alert('새 대화 시작', '현재 대화를 초기화할까요?', [
@@ -515,6 +567,8 @@ export default function Chat() {
           setIsRecording(false);
           setRecordingLevel(0);
           setRecordingRemainingMs(MAX_RECORDING_DURATION_MS);
+          recallInjectedRef.current = false;
+          setRecallLoading(false);
           reset();
         },
       },
@@ -579,7 +633,7 @@ export default function Chat() {
                     onPress={() => {
                       void handleSaveRecord();
                     }}
-                    disabled={Boolean(blockingMessage)}
+                    disabled={Boolean(blockingMessage) || summaryModelBlocked}
                     style={{ flex: 1 }}
                   />
                   <HeaderActionButton
@@ -590,6 +644,11 @@ export default function Chat() {
                     style={{ flex: 1 }}
                   />
                 </View>
+                {summaryModelBlocked ? (
+                  <Text style={{ color: BrandColors.textSecondary, fontSize: 13 }}>
+                    로컬 요약 모델 다운로드 중... {summaryDownloadPercent}% (완료 후 저장 가능)
+                  </Text>
+                ) : null}
               </View>
             </View>
           </View>
@@ -613,12 +672,21 @@ export default function Chat() {
               style={{ flex: 1 }}
               contentContainerStyle={{ paddingVertical: 12 }}
               ListEmptyComponent={
-                <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24, gap: 10 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>대화를 시작해보세요</Text>
-                  <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
-                    기억하고 싶은 일이나 걱정되는 점을 이야기해봐요!{"\n"} 해마가 함께 정리해드려요.
-                  </Text>
-                </View>
+                recallLoading ? (
+                  <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24 }}>
+                    <TypingIndicator label="채팅 생성 중" />
+                    <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', marginTop: 8 }}>
+                      지난 대화를 꺼내오는 중입니다...
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ alignItems: 'center', marginTop: 72, paddingHorizontal: 24, gap: 10 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '700', color: BrandColors.textPrimary }}>대화를 시작해보세요</Text>
+                    <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+                      기억하고 싶은 일이나 걱정되는 점을 이야기해봐요!{"\n"} 해마가 함께 정리해드려요.
+                    </Text>
+                  </View>
+                )
               }
               ListFooterComponent={isResponding ? <TypingIndicator /> : <View style={{ height: 24 }} />}
             />

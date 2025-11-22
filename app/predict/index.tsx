@@ -2,6 +2,8 @@ import { BrandColors, Shadows } from '@/constants/theme';
 import { router, Stack } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePhotoNotesStore } from '@/store/photoNotesStore';
+import { summarizeSpeechMetrics } from '@/lib/analysis/speechMetrics';
 
 type ActionCardProps = {
   title: string;
@@ -41,6 +43,42 @@ function ActionCard({ title, description, onPress }: ActionCardProps) {
 
 export default function PredictCenter() {
   const insets = useSafeAreaInsets();
+  const notes = usePhotoNotesStore((state) => state.notes);
+
+  const latestNote = [...notes]
+    .filter((note) => note.metrics)
+    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const latestSummary = summarizeSpeechMetrics(latestNote?.metrics) ?? null;
+  const latestUpdatedAt = latestNote ? new Date(latestNote.updatedAt) : null;
+
+  const riskCandidates = [...notes]
+    .filter((n) => typeof n.riskScore === 'number')
+    .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+    .slice(0, 10);
+  const avgRisk =
+    riskCandidates.length > 0
+      ? Math.round(
+          riskCandidates.reduce((acc, note) => acc + (note.riskScore ?? 0), 0) / riskCandidates.length,
+        )
+      : null;
+  const riskLevel =
+    avgRisk === null
+      ? null
+      : avgRisk >= 70
+      ? '위험 신호'
+      : avgRisk >= 40
+      ? '변화 감지'
+      : '안정';
+  const riskText =
+    avgRisk === null
+      ? '최근 음성 과제 기록이 없어요.'
+      : avgRisk >= 70
+      ? '최근 측정에서 위험 신호가 포착됐어요.'
+      : avgRisk >= 40
+      ? '최근 측정에 변화가 있어요.'
+      : '최근 측정이 안정적이에요.';
+  const riskUpdatedAt =
+    riskCandidates.length > 0 ? new Date(riskCandidates[0].updatedAt ?? Date.now()) : latestUpdatedAt;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: BrandColors.background }} edges={['top', 'left', 'right']}>
@@ -59,6 +97,90 @@ export default function PredictCenter() {
             음성 기반 과제를 수행하면 건강 통계에서 활동 지표와 위험 신호를 확인할 수 있어요.
           </Text>
         </View>
+
+        <Pressable
+          onPress={() => router.push('/stats?tab=script')}
+          style={{
+            borderRadius: 24,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: BrandColors.border,
+            backgroundColor: BrandColors.surface,
+            gap: 10,
+            ...Shadows.card,
+          }}>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>최근 위험율</Text>
+          {avgRisk !== null ? (
+            <>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>
+                {riskText} 평균 {avgRisk}% 입니다.
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: 8,
+                  marginTop: 8,
+                }}>
+                <View
+                  style={{
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    backgroundColor:
+                      riskLevel === '위험 신호'
+                        ? BrandColors.dangerSoft
+                        : riskLevel === '변화 감지'
+                        ? BrandColors.accentSoft
+                        : BrandColors.primarySoft,
+                  }}>
+                  <Text
+                    style={{
+                      color:
+                        riskLevel === '위험 신호'
+                          ? BrandColors.danger
+                          : riskLevel === '변화 감지'
+                          ? BrandColors.accent
+                          : BrandColors.primary,
+                      fontWeight: '700',
+                    }}>
+                    {riskLevel}
+                  </Text>
+                </View>
+                <Text style={{ color: BrandColors.textSecondary, fontSize: 12, alignSelf: 'center' }}>
+                  최근 10회 음성 과제 평균
+                </Text>
+              </View>
+            </>
+          ) : (
+            <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textSecondary }}>
+              최근 음성 과제 기록이 없어요.
+            </Text>
+          )}
+          <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>
+            {riskUpdatedAt
+              ? `${riskUpdatedAt.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 업데이트`
+              : '음성 기반 과제를 완료하면 결과가 표시돼요.'}
+          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: 10,
+              marginTop: 4,
+            }}>
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 999,
+                backgroundColor: BrandColors.primarySoft,
+              }}>
+              <Text style={{ color: BrandColors.primaryDark, fontWeight: '700' }}>자세히 보기</Text>
+            </View>
+            <Text style={{ color: BrandColors.textSecondary, fontSize: 12, alignSelf: 'center' }}>
+              탭하면 건강 통계로 이동
+            </Text>
+          </View>
+        </Pressable>
 
         <ActionCard
           title="사진 설명하기"

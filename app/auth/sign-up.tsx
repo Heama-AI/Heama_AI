@@ -25,20 +25,27 @@ export default function SignUp() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } },
-    });
-    setLoading(false);
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name } },
+      });
 
-    if (error) {
-      Alert.alert('회원가입 실패', error.message);
-      return;
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      // 이메일 인증을 요구하는 설정에서는 즉시 세션이 없어 RLS에 막히므로
+      // 프로필 저장은 로그인 시점(upsertUserProfile)에서 처리합니다.
+      Alert.alert('회원가입 완료', '이메일로 전송된 인증을 완료한 후 로그인해주세요.');
+      router.replace('/auth/sign-in');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '회원가입 중 오류가 발생했습니다.';
+      Alert.alert('회원가입 실패', message);
+    } finally {
+      setLoading(false);
     }
-
-    Alert.alert('회원가입 완료', '이메일로 전송된 인증을 완료한 후 로그인해주세요.');
-    router.replace('/auth/sign-in');
   };
 
   const insets = useSafeAreaInsets();
