@@ -7,6 +7,7 @@ import {
   updateRecordTitle as updateRecordTitleInStorage,
   updateRecordSummary as updateRecordSummaryInStorage,
 } from '@/lib/storage/recordsStorage';
+import { deleteMemoryQuiz } from '@/lib/storage/memoryQuizStorage';
 import { chunkMessages } from '@/lib/rag/chunker';
 import { embedText } from '@/lib/rag/embed';
 import { snippet } from '@/lib/rag/snippet';
@@ -94,6 +95,7 @@ export const useRecordsStore = create<RecordsState>((set, get) => ({
     }));
     void deleteRecordFromStorage(id);
     void deleteChunksForRecord(id);
+    void deleteMemoryQuiz(id);
   },
   getRecord: (id) => get().records.find((record) => record.id === id),
   updateRecordTitle: (id, title) => {

@@ -1,5 +1,4 @@
 import { createId } from '@/lib/conversation';
-import { loadPhotoNotes, persistPhotoNotes } from '@/lib/storage/photoNotesStorage';
 import { supabase } from '@/lib/supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import { create } from 'zustand';
@@ -56,8 +55,7 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
   hasHydrated: false,
   hydrate: async () => {
     if (get().hasHydrated) return;
-    const existing = await loadPhotoNotes();
-    set({ notes: existing, hasHydrated: true });
+    set({ notes: [], hasHydrated: true });
   },
   addNote: async ({
     imageId,
@@ -90,7 +88,6 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
     };
     const nextNotes = [note, ...get().notes];
     set({ notes: nextNotes });
-    await persistPhotoNotes(nextNotes);
     void syncNoteToSupabase(note);
     return note;
   },
@@ -109,25 +106,17 @@ export const usePhotoNotesStore = create<PhotoNotesState>((set, get) => ({
     });
     const updated = get().notes.find((n) => n.id === id);
     if (!updated) return;
-    await persistPhotoNotes(get().notes);
     void syncNoteToSupabase(updated);
   },
   mergeRemoteNotes: async (remoteNotes) => {
     if (!remoteNotes.length) return;
-    set((state) => {
+    set(() => {
       const merged = new Map<string, PhotoNote>();
-      for (const note of state.notes) {
-        merged.set(note.id, note);
-      }
       for (const remote of remoteNotes) {
-        const existing = merged.get(remote.id);
-        if (!existing || (remote.updatedAt ?? 0) > (existing.updatedAt ?? 0)) {
-          merged.set(remote.id, remote);
-        }
+        merged.set(remote.id, remote);
       }
       return { notes: Array.from(merged.values()) };
     });
-    await persistPhotoNotes(get().notes);
   },
 }));
 

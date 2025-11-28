@@ -1,4 +1,5 @@
 import { BrandColors, Shadows } from '@/constants/theme';
+import { loadMemoryQuiz } from '@/lib/storage/memoryQuizStorage';
 import { useRecordsStore } from '@/store/recordsStore';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -18,6 +19,7 @@ export default function RecordDetail() {
   const [title, setTitle] = useState(record?.title ?? '');
   const [summaryText, setSummaryText] = useState(record?.summary ?? '');
   const [keywordsText, setKeywordsText] = useState(record?.keywords.join(', ') ?? '');
+  const [hasMemoryQuiz, setHasMemoryQuiz] = useState(false);
   const [editing, setEditing] = useState(false);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -29,6 +31,26 @@ export default function RecordDetail() {
     setSummaryText(record?.summary ?? '');
     setKeywordsText(record?.keywords.join(', ') ?? '');
   }, [record?.title]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!record) {
+      setHasMemoryQuiz(false);
+      return;
+    }
+    loadMemoryQuiz(record.id)
+      .then((quiz) => {
+        if (!cancelled) {
+          setHasMemoryQuiz(Boolean(quiz && quiz.length > 0));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setHasMemoryQuiz(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [record?.id]);
 
   if (!hasHydrated) {
     return (
@@ -288,19 +310,37 @@ export default function RecordDetail() {
         </View>
 
         <View style={{ flexDirection: stackActions ? 'column' : 'row', gap: 12 }}>
-          <Pressable
-            onPress={() => router.push({ pathname: '/games/memory-quiz', params: { recordId: record.id } })}
-            style={[
-              stackActions ? { width: '100%' } : { flex: 1 },
-              {
+          <View style={[stackActions ? { width: '100%' } : { flex: 1 }, { gap: 8 }]}>
+            <Pressable
+              onPress={() => router.push({ pathname: '/games/memory-quiz', params: { recordId: record.id } })}
+              style={{
                 paddingVertical: 14,
                 borderRadius: 16,
                 backgroundColor: BrandColors.primary,
                 alignItems: 'center',
-              },
-            ]}>
-            <Text style={{ color: '#fff', fontWeight: '600' }}>이 기록으로 게임 풀기</Text>
-          </Pressable>
+              }}>
+              <Text style={{ color: '#fff', fontWeight: '600' }}>퀴즈 풀러가기</Text>
+            </Pressable>
+            {hasMemoryQuiz ? (
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/games/memory-quiz',
+                    params: { recordId: record.id, regenerate: '1' },
+                  })
+                }
+                style={{
+                  paddingVertical: 12,
+                  borderRadius: 14,
+                  backgroundColor: BrandColors.surface,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: BrandColors.border,
+                }}>
+                <Text style={{ color: BrandColors.textPrimary, fontWeight: '600' }}>퀴즈 다시 만들기</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <Pressable
             onPress={handleDelete}
             style={[

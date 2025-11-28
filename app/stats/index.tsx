@@ -1,4 +1,5 @@
 import { BrandColors, Shadows } from '@/constants/theme';
+import { useRiskPrediction } from '@/lib/analysis/riskModel';
 import {
   evaluateSpeechMetricsChange,
   summarizeSpeechMetrics,
@@ -6,21 +7,20 @@ import {
   type SpeechMetricsChangeSummary,
   type SpeechMetricsSummary,
 } from '@/lib/analysis/speechMetrics';
-import { useRiskPrediction } from '@/lib/analysis/riskModel';
 import type { GameKind, GameResult } from '@/lib/storage/gameStatsStorage';
 import { supabase } from '@/lib/supabase';
-import { summarizeGameResults, useGameStatsStore } from '@/store/gameStatsStore';
 import { useAuthStore } from '@/store/authStore';
+import { summarizeGameResults, useGameStatsStore } from '@/store/gameStatsStore';
 import { usePhotoNotesStore } from '@/store/photoNotesStore';
 import { useRecordsStore } from '@/store/recordsStore';
 import type { PhotoNote } from '@/types/photoNote';
 import type { SpeechMetrics } from '@/types/speech';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { Alert, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
 
 interface DailyDataPoint {
   label: string;
@@ -74,6 +74,63 @@ interface LanguageMetrics {
   topKeywords: string[];
 }
 
+function getRiskColors(score: number | null | undefined) {
+  if (score == null) {
+    return {
+      bg: BrandColors.surfaceSoft,
+      border: BrandColors.border,
+      text: BrandColors.textSecondary,
+      pillBg: BrandColors.surface,
+    };
+  }
+  if (score < 30) {
+    return {
+      bg: '#E3F6E9', // 진초록
+      border: '#5DC68A',
+      text: '#0F5132',
+      pillBg: '#C8F0D8',
+    };
+  }
+  if (score < 40) {
+    return {
+      bg: '#E7F9DC', // 초록
+      border: '#9FE37A',
+      text: '#2F7A2F',
+      pillBg: '#D1F1B7',
+    };
+  }
+  if (score < 50) {
+    return {
+      bg: '#FFF7D1', // 노랑
+      border: '#FFE08A',
+      text: '#8A6A00',
+      pillBg: '#FFEDAA',
+    };
+  }
+  if (score < 60) {
+    return {
+      bg: '#FFE7CC', // 주황
+      border: '#FFC078',
+      text: '#C25B00',
+      pillBg: '#FFD8A8',
+    };
+  }
+  if (score < 70) {
+    return {
+      bg: '#FFD8D8', // 연한 빨강
+      border: '#FFA8A8',
+      text: '#C92A2A',
+      pillBg: '#FFC2C2',
+    };
+  }
+  return {
+    bg: '#FFE0E0', // 빨강
+    border: '#fb6c6cff',
+    text: '#4e1212ff',
+    pillBg: '#fb6c6cff',
+  };
+}
+
 const getLastNDays = (n: number) => {
   const days: Date[] = [];
   const today = new Date();
@@ -107,6 +164,11 @@ export default function Stats() {
   const [photoMetricsLoading, setPhotoMetricsLoading] = useState(true);
   const [photoMetricsError, setPhotoMetricsError] = useState<string | null>(null);
   const [riskLoadingId, setRiskLoadingId] = useState<string | null>(null);
+  const [riskToast, setRiskToast] = useState<{ visible: boolean; score: number | null }>({
+    visible: false,
+    score: null,
+  });
+  const riskToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydrateGameStats = useGameStatsStore((state) => state.hydrate);
   const gameStatsHydrated = useGameStatsStore((state) => state.hasHydrated);
   const gameResults = useGameStatsStore((state) => state.results);
@@ -121,6 +183,14 @@ export default function Stats() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameStatsHydrated, photoNotesHydrated]);
+
+  useEffect(() => {
+    return () => {
+      if (riskToastTimer.current) {
+        clearTimeout(riskToastTimer.current);
+      }
+    };
+  }, []);
 
   const { summary, dailyTrend, participation, language } = useMemo(() => {
     if (records.length === 0) {
@@ -321,6 +391,15 @@ export default function Stats() {
     return { entries: mergedEntries, total: mergedEntries.length };
   }, [photoNotes]);
   const riskModel = useRiskPrediction();
+  const showRiskToast = useCallback((score: number) => {
+    if (riskToastTimer.current) {
+      clearTimeout(riskToastTimer.current);
+    }
+    setRiskToast({ visible: true, score });
+    riskToastTimer.current = setTimeout(() => {
+      setRiskToast({ visible: false, score: null });
+    }, 1800);
+  }, []);
 
   const handleRiskPrediction = useCallback(
     async (entry: PhotoMetricsEntry) => {
@@ -342,6 +421,7 @@ export default function Stats() {
         const riskScore = Math.round(Math.max(0, Math.min(1, predicted)) * 100);
         console.log('[RiskModel] predicted risk', { entryId: entry.id, riskScore });
         await updateRiskScore(entry.id, riskScore);
+        showRiskToast(riskScore);
       } catch (error) {
         console.error('위험도 예측 실패', error);
         Alert.alert('계산 실패', '위험도 예측 중 오류가 발생했습니다.');
@@ -349,7 +429,7 @@ export default function Stats() {
         setRiskLoadingId(null);
       }
     },
-    [riskModel, updateRiskScore],
+    [riskModel, showRiskToast, updateRiskScore],
   );
 
   return (
@@ -423,6 +503,39 @@ export default function Stats() {
         kind={graphKind}
         data={graphKind ? buildGameRunSeries(gameResults, graphKind) : []}
       />
+      <Modal visible={riskToast.visible} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.35)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}>
+          <View
+            style={{
+              width: '100%',
+              maxWidth: 380,
+              backgroundColor: BrandColors.surface,
+              borderRadius: 26,
+              padding: 26,
+              gap: 12,
+              borderWidth: 1,
+              borderColor: BrandColors.border,
+              ...Shadows.card,
+            }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: BrandColors.textSecondary, textAlign: 'center' }}>
+              계산 완료
+            </Text>
+            <Text style={{ fontSize: 46, fontWeight: '900', color: BrandColors.primary, textAlign: 'center' }}>
+              {riskToast.score ?? 0}%
+            </Text>
+            <Text style={{ color: BrandColors.textSecondary, textAlign: 'center', lineHeight: 20 }}>
+              방금 계산된 위험도예요! 꾸준히 기록해 주세요.
+            </Text>
+          </View>
+        </View>
+      </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -681,7 +794,13 @@ function PhotoMetricsSection({
   const total = activeEntries.length;
 
   useEffect(() => {
-    setSelectedId(activeEntries[0]?.id ?? null);
+    setSelectedId((prev) => {
+      if (!activeEntries.length) return null;
+      if (prev && activeEntries.some((entry) => entry.id === prev)) {
+        return prev;
+      }
+      return activeEntries[0]?.id ?? null;
+    });
   }, [activeEntries]);
 
   const activeEntry = selectedId
@@ -814,6 +933,8 @@ function PhotoMetricsCard({
   onCalculateRisk: (entry: PhotoMetricsEntry) => Promise<void>;
   calculating: boolean;
 }) {
+  const hasScore = entry.riskScore != null;
+  const riskColors = getRiskColors(entry.riskScore ?? null);
   return (
     <View style={{ gap: 14 }}>
       <Text style={{ fontSize: 13, color: BrandColors.textSecondary }}>
@@ -827,48 +948,76 @@ function PhotoMetricsCard({
 
       <View
         style={{
-          borderRadius: 16,
+          borderRadius: 22,
           borderWidth: 1,
-          borderColor: BrandColors.border,
-          backgroundColor: BrandColors.surface,
-          padding: 14,
-          gap: 10,
+          borderColor: riskColors.border,
+          backgroundColor: riskColors.bg,
+          padding: 18,
+          gap: 14,
+          ...Shadows.card,
         }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: BrandColors.textPrimary }}>위험도 예측</Text>
-          <Text style={{ color: BrandColors.textSecondary, fontSize: 12 }}>TFLite 모델 기반</Text>
+          <Text style={{ fontSize: 15, fontWeight: '800', color: hasScore ? BrandColors.textPrimary : BrandColors.textSecondary }}>
+            위험도 예측
+          </Text>
+          <Text style={{ color: hasScore ? BrandColors.textSecondary : BrandColors.textSecondary, fontSize: 12 }}>
+            TFLite 기반
+          </Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <View
             style={{
-              paddingHorizontal: 14,
-              paddingVertical: 8,
-              borderRadius: 12,
-              backgroundColor: entry.riskScore != null ? BrandColors.primarySoft : BrandColors.surfaceSoft,
+              width: 96,
+              height: 96,
+              borderRadius: 999,
+              backgroundColor: riskColors.pillBg,
+              alignItems: 'center',
+              justifyContent: 'center',
               borderWidth: 1,
-              borderColor: BrandColors.border,
+              borderColor: riskColors.border,
+              ...Shadows.card,
             }}>
-            <Text style={{ fontSize: 16, fontWeight: '800', color: BrandColors.primary }}>
-              {entry.riskScore != null ? `${entry.riskScore}%` : '미계산'}
+            <Text style={{ fontSize: 15, fontWeight: '700', color: riskColors.text }}>RISK</Text>
+            <Text style={{ fontSize: 32, fontWeight: '900', color: riskColors.text }}>
+              {entry.riskScore != null ? `${entry.riskScore}%` : '--'}
             </Text>
           </View>
-          <Text style={{ color: BrandColors.textSecondary }}>
-            {entry.riskScore != null ? '최근 계산된 위험도' : '아직 계산되지 않았습니다.'}
-          </Text>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={{ color: hasScore ? BrandColors.textPrimary : BrandColors.textSecondary, fontSize: 16, fontWeight: '700' }}>
+              {hasScore ? '최근 계산된 위험도' : '아직 계산되지 않았습니다.'}
+            </Text>
+            <Text style={{ color: BrandColors.textSecondary, lineHeight: 20 }}>
+              건강 추적에 핵심이 되는 지표예요. 계산 버튼을 눌러 최신 값을 확인해 주세요.
+            </Text>
+          </View>
         </View>
         <Pressable
           onPress={() => onCalculateRisk(entry)}
           disabled={calculating || !entry.metrics}
           style={{
             marginTop: 4,
-            paddingVertical: 12,
-            borderRadius: 12,
+            paddingVertical: 14,
+            borderRadius: 14,
             alignItems: 'center',
-            backgroundColor: calculating ? BrandColors.surfaceSoft : BrandColors.primary,
+            backgroundColor: calculating ? riskColors.pillBg : riskColors.pillBg,
             opacity: entry.metrics ? 1 : 0.6,
+            borderWidth: 1,
+            borderColor: calculating ? riskColors.border : riskColors.border,
           }}>
-          <Text style={{ color: calculating ? BrandColors.textSecondary : '#fff', fontWeight: '700' }}>
-            {entry.metrics ? (calculating ? '위험도 계산 중...' : '위험도 다시 계산') : '지표 없음'}
+            <Text
+              style={{
+                color: riskColors.text,
+                fontWeight: '800',
+                fontSize: 15,
+                letterSpacing: 0.3,
+              }}>
+            {entry.metrics
+              ? calculating
+                ? '위험도 계산 중...'
+                : hasScore
+                ? '위험도 다시 계산'
+                : '위험도 계산하기'
+              : '지표 없음'}
           </Text>
         </Pressable>
       </View>

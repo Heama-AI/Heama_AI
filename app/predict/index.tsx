@@ -1,15 +1,41 @@
 import { BrandColors, Shadows } from '@/constants/theme';
+import { summarizeSpeechMetrics } from '@/lib/analysis/speechMetrics';
+import { usePhotoNotesStore } from '@/store/photoNotesStore';
 import { router, Stack } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePhotoNotesStore } from '@/store/photoNotesStore';
-import { summarizeSpeechMetrics } from '@/lib/analysis/speechMetrics';
 
 type ActionCardProps = {
   title: string;
   description: string;
   onPress: () => void;
 };
+
+function getRiskColors(score: number | null) {
+  if (score == null) {
+    return {
+      bg: BrandColors.surfaceSoft,
+      border: BrandColors.border,
+      text: BrandColors.textSecondary,
+    };
+  }
+  if (score < 30) {
+    return { bg: '#E3F6E9', border: '#5DC68A', text: '#0F5132' };
+  }
+  if (score < 40) {
+    return { bg: '#E7F9DC', border: '#9FE37A', text: '#2F7A2F' };
+  }
+  if (score < 50) {
+    return { bg: '#FFF7D1', border: '#FFE08A', text: '#8A6A00' };
+  }
+  if (score < 60) {
+    return { bg: '#FFE7CC', border: '#FFC078', text: '#C25B00' };
+  }
+  if (score < 70) {
+    return { bg: '#FFD8D8', border: '#FFA8A8', text: '#C92A2A' };
+  }
+  return { bg: '#FFE0E0', border: '#FFA8A8', text: '#C92A2A' };
+}
 
 function ActionCard({ title, description, onPress }: ActionCardProps) {
   return (
@@ -55,28 +81,12 @@ export default function PredictCenter() {
     .filter((n) => typeof n.riskScore === 'number')
     .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
     .slice(0, 10);
+  const riskSampleCount = riskCandidates.length;
   const avgRisk =
-    riskCandidates.length > 0
-      ? Math.round(
-          riskCandidates.reduce((acc, note) => acc + (note.riskScore ?? 0), 0) / riskCandidates.length,
-        )
+    riskSampleCount > 0
+      ? Math.round(riskCandidates.reduce((acc, note) => acc + (note.riskScore ?? 0), 0) / riskSampleCount)
       : null;
-  const riskLevel =
-    avgRisk === null
-      ? null
-      : avgRisk >= 70
-      ? '위험 신호'
-      : avgRisk >= 40
-      ? '변화 감지'
-      : '안정';
-  const riskText =
-    avgRisk === null
-      ? '최근 음성 과제 기록이 없어요.'
-      : avgRisk >= 70
-      ? '최근 측정에서 위험 신호가 포착됐어요.'
-      : avgRisk >= 40
-      ? '최근 측정에 변화가 있어요.'
-      : '최근 측정이 안정적이에요.';
+  const riskColors = getRiskColors(avgRisk);
   const riskUpdatedAt =
     riskCandidates.length > 0 ? new Date(riskCandidates[0].updatedAt ?? Date.now()) : latestUpdatedAt;
 
@@ -106,51 +116,31 @@ export default function PredictCenter() {
             borderWidth: 1,
             borderColor: BrandColors.border,
             backgroundColor: BrandColors.surface,
-            gap: 10,
+            gap: 12,
             ...Shadows.card,
           }}>
-          <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>최근 위험율</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: BrandColors.textPrimary }}>최근 위험도</Text>
+            <Text style={{ color: BrandColors.textSecondary, fontSize: 12 }}>
+              최근 {riskSampleCount || 0}회(최대 10회) 기준
+            </Text>
+          </View>
           {avgRisk !== null ? (
-            <>
-              <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textPrimary }}>
-                {riskText} 평균 {avgRisk}% 입니다.
-              </Text>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  gap: 8,
-                  marginTop: 8,
-                }}>
-                <View
-                  style={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 999,
-                    backgroundColor:
-                      riskLevel === '위험 신호'
-                        ? BrandColors.dangerSoft
-                        : riskLevel === '변화 감지'
-                        ? BrandColors.accentSoft
-                        : BrandColors.primarySoft,
-                  }}>
-                  <Text
-                    style={{
-                      color:
-                        riskLevel === '위험 신호'
-                          ? BrandColors.danger
-                          : riskLevel === '변화 감지'
-                          ? BrandColors.accent
-                          : BrandColors.primary,
-                      fontWeight: '700',
-                    }}>
-                    {riskLevel}
-                  </Text>
-                </View>
-                <Text style={{ color: BrandColors.textSecondary, fontSize: 12, alignSelf: 'center' }}>
-                  최근 10회 음성 과제 평균
-                </Text>
-              </View>
-            </>
+            <View
+              style={{
+                gap: 10,
+                padding: 14,
+                borderRadius: 16,
+                backgroundColor: riskColors.bg,
+                borderWidth: 1,
+                borderColor: riskColors.border,
+                alignItems: 'center',
+                alignSelf: 'center',
+                width: '55%',
+              }}>
+              <Text style={{ fontSize: 14, color: BrandColors.textSecondary }}>평균</Text>
+              <Text style={{ fontSize: 32, fontWeight: '900', color: riskColors.text }}>{avgRisk}%</Text>
+            </View>
           ) : (
             <Text style={{ fontSize: 20, fontWeight: '700', color: BrandColors.textSecondary }}>
               최근 음성 과제 기록이 없어요.

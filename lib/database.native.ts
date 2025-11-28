@@ -54,6 +54,16 @@ async function applyMigrations(db: SQLite.SQLiteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_record_chunks_record_id ON record_chunks (record_id);
   `);
   await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS memory_quizzes (
+      record_id TEXT PRIMARY KEY NOT NULL,
+      quiz_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+  `);
+  await db.execAsync(`
+    CREATE INDEX IF NOT EXISTS idx_memory_quizzes_created_at ON memory_quizzes (created_at DESC);
+  `);
+  await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_chat_messages_ts ON chat_messages (ts);
   `);
   await db.execAsync(`

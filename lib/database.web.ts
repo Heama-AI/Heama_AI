@@ -1,6 +1,7 @@
 const CHAT_STORAGE_KEY = 'heama_chat_messages';
 const RECORDS_STORAGE_KEY = 'heama_records';
 const CONVERSATION_ID_KEY = 'heama_conversation_id';
+const MEMORY_QUIZ_STORAGE_KEY = 'heama_memory_quizzes';
 
 type ChatRow = {
   id: string;
@@ -23,6 +24,12 @@ type RecordRow = {
   fhir_bundle_json: string;
 };
 
+type MemoryQuizRow = {
+  record_id: string;
+  quiz_json: string;
+  created_at: number;
+};
+
 type WebDatabase = {
   execAsync: (source: string) => Promise<void>;
   runAsync: (source: string, params?: Record<string, unknown>) => Promise<void>;
@@ -35,12 +42,14 @@ type StoreShape = {
   chatMessages: ChatRow[];
   records: RecordRow[];
   conversationId?: string | null;
+  memoryQuizzes: MemoryQuizRow[];
 };
 
 const memoryStore: StoreShape = {
   chatMessages: [],
   records: [],
   conversationId: null,
+  memoryQuizzes: [],
 };
 
 const hasLocalStorage = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -74,6 +83,7 @@ function ensureHydrated() {
     fhir_bundle_json: record.fhir_bundle_json ?? '{}',
   }));
   memoryStore.conversationId = loadFromStorage<string | null>(CONVERSATION_ID_KEY, null);
+  memoryStore.memoryQuizzes = loadFromStorage<MemoryQuizRow[]>(MEMORY_QUIZ_STORAGE_KEY, []);
   hydrated = true;
 }
 
@@ -124,6 +134,23 @@ function upsertRecordRow(params: Record<string, unknown>) {
   persistToStorage(RECORDS_STORAGE_KEY, memoryStore.records);
 }
 
+function upsertMemoryQuizRow(params: Record<string, unknown>) {
+  ensureHydrated();
+  const row: MemoryQuizRow = {
+    record_id: String(params.$recordId ?? ''),
+    quiz_json: String(params.$quiz ?? '[]'),
+    created_at: Number(params.$createdAt ?? Date.now()),
+  };
+  const index = memoryStore.memoryQuizzes.findIndex((item) => item.record_id === row.record_id);
+  if (index >= 0) {
+    memoryStore.memoryQuizzes[index] = row;
+  } else {
+    memoryStore.memoryQuizzes.push(row);
+  }
+  memoryStore.memoryQuizzes.sort((a, b) => b.created_at - a.created_at);
+  persistToStorage(MEMORY_QUIZ_STORAGE_KEY, memoryStore.memoryQuizzes);
+}
+
 const webDatabase: WebDatabase = {
   async execAsync(source: string) {
     ensureHydrated();
@@ -148,10 +175,20 @@ const webDatabase: WebDatabase = {
       upsertRecordRow(params);
       return;
     }
+    if (normalized.startsWith('INSERT OR REPLACE INTO MEMORY_QUIZZES') || normalized.startsWith('INSERT INTO MEMORY_QUIZZES')) {
+      upsertMemoryQuizRow(params);
+      return;
+    }
     if (normalized.startsWith('DELETE FROM RECORDS')) {
       const id = String(params.$id ?? '');
       memoryStore.records = memoryStore.records.filter((record) => record.id !== id);
       persistToStorage(RECORDS_STORAGE_KEY, memoryStore.records);
+      return;
+    }
+    if (normalized.startsWith('DELETE FROM MEMORY_QUIZZES')) {
+      const recordId = String(params.$recordId ?? '');
+      memoryStore.memoryQuizzes = memoryStore.memoryQuizzes.filter((quiz) => quiz.record_id !== recordId);
+      persistToStorage(MEMORY_QUIZ_STORAGE_KEY, memoryStore.memoryQuizzes);
       return;
     }
     if (normalized.startsWith('UPDATE RECORDS SET TITLE')) {
@@ -192,6 +229,9 @@ const webDatabase: WebDatabase = {
     if (normalized.startsWith('SELECT * FROM RECORDS')) {
       return memoryStore.records.slice() as unknown as T[];
     }
+    if (normalized.startsWith('SELECT * FROM MEMORY_QUIZZES')) {
+      return memoryStore.memoryQuizzes.slice() as unknown as T[];
+    }
     if (normalized.startsWith('SELECT VALUE FROM APP_STATE')) {
       if (normalized.includes('CONVERSATION_ID')) {
         const value = memoryStore.conversationId ?? null;
@@ -210,6 +250,11 @@ const webDatabase: WebDatabase = {
         const value = memoryStore.conversationId ?? null;
         return (value !== null ? [{ value }] : [])?.[0] as unknown as T | undefined;
       }
+    }
+    if (normalized.startsWith('SELECT * FROM MEMORY_QUIZZES WHERE')) {
+      ensureHydrated();
+      const recordId = String(params.$recordId ?? '');
+      return memoryStore.memoryQuizzes.find((row) => row.record_id === recordId) as unknown as T | undefined;
     }
     const all = await this.getAllAsync<T>(source);
     return all[0];

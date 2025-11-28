@@ -3,8 +3,10 @@ import { BrandColors, Shadows } from '@/constants/theme';
 import { generateDistractors, generateParaphrasedDistractors } from '@/lib/rag/distractors';
 import { condenseChoiceText } from '@/lib/rag/shorten';
 import { snippet } from '@/lib/rag/snippet';
+import { loadMemoryQuiz, saveMemoryQuiz } from '@/lib/storage/memoryQuizStorage';
 import { loadChunks } from '@/lib/storage/recordChunksStorage';
 import { useRecordsStore } from '@/store/recordsStore';
+import { MemoryQuizQuestion } from '@/types/memoryQuiz';
 import { ConversationRecord } from '@/types/records';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -18,14 +20,6 @@ interface GameState {
   showExplanation: boolean;
   completed: boolean;
 }
-
-type MemoryQuestion = {
-  id: string;
-  question: string;
-  choices: string[];
-  answer: string;
-  explanation?: string;
-};
 
 const initialGameState: GameState = {
   questionIndex: 0,
@@ -117,7 +111,7 @@ async function buildMemoryQuizAsync(
   record: ConversationRecord,
   allRecords: ConversationRecord[],
   allChunks: Array<{ id: string; recordId: string; chunk: string }>,
-): Promise<MemoryQuestion[]> {
+): Promise<MemoryQuizQuestion[]> {
   if (!record) return [];
 
   // Q1: 요약 기반
@@ -272,7 +266,7 @@ function LoadingOrbit() {
           borderColor: BrandColors.border,
           ...Shadows.card,
         }}>
-        <Text style={{ color: BrandColors.primary, fontWeight: '800', fontSize: 16 }}>RAG</Text>
+        <Text style={{ color: BrandColors.primary, fontWeight: '800', fontSize: 16 }}>MEMORY</Text>
         <Text style={{ color: BrandColors.textSecondary, fontWeight: '600', fontSize: 12 }}>Quiz</Text>
       </View>
     </View>
@@ -280,14 +274,18 @@ function LoadingOrbit() {
 }
 
 export default function MemoryQuiz() {
-  const { recordId } = useLocalSearchParams<{ recordId?: string }>();
+  const { recordId, regenerate } = useLocalSearchParams<{ recordId?: string; regenerate?: string }>();
   const { records } = useRecordsStore();
   const [state, setState] = useState<GameState>(initialGameState);
   const [chunks, setChunks] = useState<
     Array<{ id: string; recordId: string; chunk: string; embedding: number[] | null; createdAt: number }>
   >([]);
-  const [questions, setQuestions] = useState<MemoryQuestion[]>([]);
+  const [chunksReady, setChunksReady] = useState(false);
+  const [questions, setQuestions] = useState<MemoryQuizQuestion[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [forceRegenerate, setForceRegenerate] = useState(
+    regenerate === '1' || regenerate === 'true' || regenerate === 'yes',
+  );
 
   const insets = useSafeAreaInsets();
   const activeRecord = useMemo(() => {
@@ -301,35 +299,70 @@ export default function MemoryQuiz() {
 
   useEffect(() => {
     setState(initialGameState);
-  }, [activeRecord?.id]);
+    setQuestions([]);
+    setLoadingQuestions(true);
+  }, [activeRecord?.id, forceRegenerate]);
+
+  useEffect(() => {
+    setForceRegenerate(regenerate === '1' || regenerate === 'true' || regenerate === 'yes');
+  }, [recordId, regenerate]);
 
   useEffect(() => {
     loadChunks()
       .then((loaded) => setChunks(loaded))
-      .catch(() => setChunks([]));
+      .catch(() => setChunks([]))
+      .finally(() => setChunksReady(true));
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     if (!activeRecord) {
       setQuestions([]);
+      setLoadingQuestions(false);
       return;
     }
     setLoadingQuestions(true);
-    buildMemoryQuizAsync(activeRecord, records, chunks)
-      .then((qs) => {
-        if (!cancelled) setQuestions(qs);
-      })
-      .catch(() => {
-        if (!cancelled) setQuestions([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingQuestions(false);
-      });
+
+    const loadOrGenerate = async () => {
+      if (!forceRegenerate) {
+        try {
+          const existing = await loadMemoryQuiz(activeRecord.id);
+          if (!cancelled && existing && existing.length > 0) {
+            setQuestions(existing);
+            setLoadingQuestions(false);
+            return;
+          }
+        } catch {
+          // ignore cache errors and regenerate
+        }
+      }
+      if (!chunksReady) {
+        return;
+      }
+
+      try {
+        const qs = await buildMemoryQuizAsync(activeRecord, records, chunks);
+        if (cancelled) return;
+        setQuestions(qs);
+        setLoadingQuestions(false);
+        void saveMemoryQuiz(activeRecord.id, qs);
+      } catch {
+        if (!cancelled) {
+          setQuestions([]);
+          setLoadingQuestions(false);
+        }
+      } finally {
+        if (!cancelled && forceRegenerate) {
+          setForceRegenerate(false);
+        }
+      }
+    };
+
+    void loadOrGenerate();
     return () => {
       cancelled = true;
     };
-  }, [activeRecord, records, chunks]);
+  }, [activeRecord, records, chunks, chunksReady, forceRegenerate]);
 
   if (!activeRecord) {
     return (
