@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>해마 주간 보호자 리포트 - 예시</title>
+  <style>
+    body { margin: 0; padding: 0; background: #fdf8e4; font-family: 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif; color: #2f2a19; }
+    .container { width: 100%; background: #fdf8e4; padding: 24px 0; }
+    .card { max-width: 640px; margin: 0 auto; background: #ffffff; border: 1px solid #f0e2b6; border-radius: 16px; box-shadow: 0 12px 28px rgba(177, 148, 58, 0.16); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #f7c948 0%, #9fdb5c 100%); padding: 24px; color: #2f2a19; }
+    .badge { display: inline-block; padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.76); color: #2f2a19; font-size: 13px; font-weight: 700; letter-spacing: -0.2px; }
+    .title { margin: 12px 0 0; font-size: 24px; font-weight: 800; letter-spacing: -0.4px; }
+    .subtitle { margin: 4px 0 0; font-size: 15px; color: #4b452c; letter-spacing: -0.2px; }
+    .section { padding: 20px 24px; border-bottom: 1px solid #f0e2b6; }
+    .section:last-child { border-bottom: none; }
+    .section-title { font-size: 16px; font-weight: 800; margin: 0 0 10px; color: #2f2a19; }
+    .summary-grid { width: 100%; border-spacing: 12px 0; }
+    .summary-col { width: 50%; padding: 0 8px; }
+    .pill { border-radius: 14px; padding: 14px; background: #fff3c4; border: 1px solid #f0e2b6; font-size: 14px; line-height: 1.5; }
+    .stat-card { border-radius: 12px; padding: 14px; border: 1px solid #f0e2b6; background: #ffffff; }
+    .stat-label { font-size: 13px; color: #6f6542; margin: 0 0 6px; }
+    .stat-value { font-size: 22px; font-weight: 800; color: #2f2a19; margin: 0; letter-spacing: -0.2px; }
+    .stat-delta { font-size: 12px; color: #58b368; margin-left: 6px; font-weight: 700; }
+    .progress-wrap { width: 100%; background: #fff8d4; border-radius: 12px; overflow: hidden; border: 1px solid #f0e2b6; height: 12px; }
+    .progress-bar { height: 100%; background: linear-gradient(135deg, #f7c948, #58b368); }
+    .table { width: 100%; border-collapse: collapse; }
+    .table td { padding: 10px 0; border-bottom: 1px solid #f0e2b6; font-size: 14px; color: #2f2a19; }
+    .table td:last-child { text-align: right; color: #6f6542; }
+    .chip { display: inline-block; padding: 6px 10px; border-radius: 10px; background: rgba(88, 179, 104, 0.14); color: #2f2a19; font-size: 12px; font-weight: 700; margin: 0 6px 6px 0; border: 1px solid rgba(88, 179, 104, 0.3); }
+    .cta { display: inline-block; padding: 12px 18px; background: #2f2a19; color: #ffffff; border-radius: 12px; font-weight: 800; text-decoration: none; letter-spacing: -0.2px; }
+    @media (max-width: 640px) { .card { margin: 0 10px; } .section { padding: 18px 18px; } .summary-grid { border-spacing: 0; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div class="badge">2024.07.01 - 2024.07.07</div>
+        <div class="title">김보호자님, 해마의 이번 주 기록을 전달드립니다</div>
+        <div class="subtitle">AI 치매 예측 핵심 지표만 담았습니다.</div>
+      </div>
+
+      <div class="section">
+        <div style="display: flex; justify-content: center;">
+          <div class="stat-card" style="background: linear-gradient(135deg, rgba(247,201,72,0.18), rgba(159,219,92,0.18)); width: 360px; text-align: left;">
+            <div class="stat-label">AI 치매 예측 위험도</div>
+            <p class="stat-value" style="font-size: 26px;">낮음<span class="stat-delta">-4%p</span></p>
+            <div class="progress-wrap">
+              <div class="progress-bar" style="width: 22%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">AI 치매 예측 (가장 중요)</div>
+        <div class="pill">
+          이번 주 위험도는 "낮음"으로 유지되었습니다. 지시문 따라 읽기와 사진 설명 정확도가 높고, 발화 길이도 안정적입니다.
+        </div>
+        <table class="table" role="presentation" style="margin-top: 12px;">
+          <tr>
+            <td>위험도 점수</td>
+            <td>22 / 100</td>
+          </tr>
+          <tr>
+            <td>평균 말 속도 (WPM)</td>
+            <td>52.4 단어/분</td>
+          </tr>
+          <tr>
+            <td>평균 발화 길이 (MLU)</td>
+            <td>15.46 단어/발화</td>
+          </tr>
+          <tr>
+            <td>어휘 다양도 (TTR)</td>
+            <td>0.468</td>
+          </tr>
+          <tr>
+            <td>총 단어 수</td>
+            <td>201 단어</td>
+          </tr>
+          <tr>
+            <td>발화 수</td>
+            <td>13회</td>
+          </tr>
+          <tr>
+            <td>평균 정지 길이</td>
+            <td>3.19 초</td>
+          </tr>
+          <tr>
+            <td>정지(침묵) 횟수</td>
+            <td>19회 (분당 4.96회)</td>
+          </tr>
+          <tr>
+            <td>총 말한 시간</td>
+            <td>229.98 초</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="section" style="text-align: center;">
+        <a class="cta" href="https://app.haema.example/deeplink">해마에서 자세히 보기</a>
+        <div style="margin-top: 10px; font-size: 12px; color: #6f6542;">앱을 열어 세부 기록과 대화 로그를 확인하세요.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
