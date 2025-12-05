@@ -62,3 +62,6 @@
 | **AI Models** | `gpt-4o-mini`(상담), `Gemma-3-270m`(온디바이스), `XGBoost`/`LSTM`(위험도 예측) |
 | **Standards**| `HL7 FHIR` (의료 데이터 표준) |
 | **Infra** | `Docker`, `AWS/GCP` (예정) |
+
+### 시연 영상
+[![해마 시연 영상](http://img.youtube.com/vi/sL4jqhARjqI/0.jpg)](https://youtu.be/sL4jqhARjqI?t=0s) 
